@@ -1,5 +1,5 @@
 // Shared runtime for generated Wasm32 bindings. Native pointers stay private.
-import {typedArray, byteLength, createByteAccess} from "./byte_access.mjs";
+import {isTypedArray, typedArray, byteLength, createByteAccess} from "./byte_access.mjs";
 
 // Snapshot file inputs before asynchronous module initialization. Workers use
 // the normal native filesystem, so asset loading needs no JavaScript callbacks.
@@ -294,7 +294,7 @@ export function createBindings(wasm, schema, constants = {}) {
         }
 
         // Preserve Uint8Array inputs accepted by the original signed-byte spans.
-        const Type = spec.type === "i8" && value instanceof Uint8Array ? Uint8Array : scalarArrays[spec.type];
+        const Type = spec.type === "i8" && isTypedArray(value, Uint8Array) ? Uint8Array : scalarArrays[spec.type];
         const values = typedArray(value, Type);
         if (embedded && length !== values.length) throw new RangeError(`Fixed array requires exactly ${length} elements`);
         if (length > values.length) throw new RangeError("Element count exceeds the input array");

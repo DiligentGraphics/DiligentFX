@@ -6,10 +6,17 @@ const arrayPrototype = Object.getPrototypeOf(ByteArray.prototype);
 const getBuffer = Object.getOwnPropertyDescriptor(arrayPrototype, "buffer").get;
 const getOffset = Object.getOwnPropertyDescriptor(arrayPrototype, "byteOffset").get;
 const getLength = Object.getOwnPropertyDescriptor(arrayPrototype, "byteLength").get;
+const getTypeName = Object.getOwnPropertyDescriptor(arrayPrototype, Symbol.toStringTag).get;
 const setBytes = ByteArray.prototype.set;
 
+export function isTypedArray(value, Type) {
+    // Read the internal typed-array brand, independent of the caller's realm or
+    // an overridden Symbol.toStringTag. instanceof rejects foreign-realm views.
+    return getTypeName.call(value) === Type.name;
+}
+
 export function typedArray(value, Type) {
-    if (!(value instanceof Type)) throw new TypeError(`Expected ${Type.name}`);
+    if (!isTypedArray(value, Type)) throw new TypeError(`Expected ${Type.name}`);
     // Normalize caller views without invoking overridden getters, methods, or
     // species constructors. Constructing the view also rejects detached buffers.
     return new Type(getBuffer.call(value), getOffset.call(value), getLength.call(value) / Type.BYTES_PER_ELEMENT);
