@@ -19,7 +19,7 @@ The model and generator tests separately check declarations and metadata.
 | `animation_tests.mjs` | Clip creation/reflection, binding creation/evaluation, every registry method, scene/material/pose/morph destinations, quaternion helpers |
 | `import_tests.mjs` | Scene loading and clip reflection; importer creation, ImportScene, InstantiateScene, ProcessPendingImports; GLTF/OBJ files, relative MTL dependencies and imported animation |
 | `renderer_tests.mjs` | Renderer/view creation and descriptions, render-target size, all view setters, retained scene/target snapshots, frame calls without a GPU |
-| `browser/bootstrap_tests.mjs` | Browser-only WebGPU device attachment, canvas target creation, frame submission, resize, and shutdown |
+| `browser/bootstrap_tests.mjs` | Browser-only WebGPU device attachment, canvas target creation, frame submission, resize, shutdown, and failed-initialization cleanup |
 
 Native callbacks, externally supplied thread pools, importer implementations,
 custom component storage, and native Diligent GPU/backend objects are not exposed.

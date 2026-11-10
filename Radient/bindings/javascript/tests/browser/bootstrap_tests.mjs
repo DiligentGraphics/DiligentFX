@@ -4,17 +4,32 @@
 // after a failed assertion too, so a regression cannot leak workers into later tests.
 function trackInitializationResources(t) {
     const NativeWorker = globalThis.Worker;
+    const nativeSetInterval = globalThis.setInterval;
+    const nativeClearInterval = globalThis.clearInterval;
     const requestDevice = GPUAdapter.prototype.requestDevice;
     const workers = new Set();
+    const intervals = new Set();
     const devices = [];
     const destroyedDevices = new Set();
     let workerCount = 0;
     t.after(() => {
         globalThis.Worker = NativeWorker;
+        globalThis.setInterval = nativeSetInterval;
+        globalThis.clearInterval = nativeClearInterval;
         GPUAdapter.prototype.requestDevice = requestDevice;
         for (const worker of workers) worker.terminate();
+        for (const interval of intervals) nativeClearInterval(interval);
         for (const device of devices) device.destroy();
     });
+    globalThis.setInterval = (...args) => {
+        const interval = nativeSetInterval(...args);
+        intervals.add(interval);
+        return interval;
+    };
+    globalThis.clearInterval = interval => {
+        intervals.delete(interval);
+        nativeClearInterval(interval);
+    };
     globalThis.Worker = class extends NativeWorker {
         constructor(...args) {
             super(...args);
@@ -36,7 +51,7 @@ function trackInitializationResources(t) {
         };
         return device;
     };
-    return {workers, devices, destroyedDevices, get workerCount() { return workerCount; }};
+    return {workers, intervals, devices, destroyedDevices, get workerCount() { return workerCount; }};
 }
 
 export function registerTests({test, assert}) {
@@ -58,7 +73,7 @@ export function registerTests({test, assert}) {
             "/conflict/child": new Uint8Array([2]),
         }}],
     ]) {
-        test(`WebGPU initialization releases workers and device after ${name}`, async t => {
+        test(`WebGPU initialization releases workers, timers, and device after ${name}`, async t => {
             const {default: createRadientBrowser} = await import("/generated/RadientBrowser.mjs");
             const resources = trackInitializationResources(t);
             const injectedError = injectFailure?.(t);
@@ -81,6 +96,7 @@ export function registerTests({test, assert}) {
             assert.equal((await resources.devices[0].lost).reason, "destroyed");
             assert.ok(resources.workerCount > 0, "The module must have preloaded workers before failing");
             assert.equal(resources.workers.size, 0, "All preloaded workers must be terminated");
+            assert.equal(resources.intervals.size, 0, "Dependency timers must not retain the failed module");
         });
     }
     test("WebGPU engine attaches, presents, resizes existing targets, and shuts down", async t => {

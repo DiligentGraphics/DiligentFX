@@ -1,9 +1,18 @@
 #preprocess
-#if PTHREADS
 // Linked with --pre-js, before workers are created or Wasm memory is allocated.
-// Capture the internal manager through this module's scope: Module.PThread is
-// exported only after memory allocation and may be unavailable when it fails.
 Module["__bindingCleanupInitialization"] = () => {
-    if (typeof PThread !== "undefined") PThread.terminateAllThreads();
-};
+    // A preRun exception does not call abort(). Stop initialization and its
+    // dependency watcher without resolving dependencies or replacing the error.
+    ABORT = true;
+#if ASSERTIONS
+    if (typeof runDependencyWatcher !== "undefined" && runDependencyWatcher !== null) {
+        clearInterval(runDependencyWatcher);
+        runDependencyWatcher = null;
+    }
 #endif
+#if PTHREADS
+    // Module.PThread is exported only after memory allocation, so an early
+    // failure must use the internal manager captured through this scope.
+    if (typeof PThread !== "undefined") PThread.terminateAllThreads();
+#endif
+};
