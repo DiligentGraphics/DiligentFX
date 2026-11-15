@@ -1,0 +1,9 @@
+# Google Test patterns excluded only from the browser run.
+# New tests run by default. Keep browser-specific exclusions in this module.
+
+# This negative test requires C++ exception catching, disabled in the Web build.
+RadientPBRRendererGPUTest.ValidatesActiveMorphTargetLimit
+
+# Missing-file recovery throws from StandardFile before the resolver can catch it.
+RadientAssetManagerGPUTest.SceneWithMissingTexturesUsesDefaultsForAllSupportedMaterialTextures
+RadientAssetManagerGPUTest.SceneWithMissingDDSTextureUsesDefault

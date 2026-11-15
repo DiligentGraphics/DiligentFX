@@ -7,6 +7,7 @@ set(MAIN_CPP ../../../DiligentCore/Tests/DiligentCoreAPITest/src/main.cpp)
 
 add_executable(RadientGPUTest ${SOURCE} ${MAIN_CPP})
 set_common_target_properties(RadientGPUTest)
+configure_radient_browser_test(RadientGPUTest)
 
 target_include_directories(RadientGPUTest
 PRIVATE

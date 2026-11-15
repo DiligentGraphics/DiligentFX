@@ -17,7 +17,7 @@ jobs:
         include:
           - os:         "windows-2025"
             host_name:  "Win10"
-            cmake_args: "-DDILIGENT_NO_WEBGPU=ON"
+            cmake_args: "-DDILIGENT_NO_WEBGPU=OFF"
 
           - os:         "ubuntu-26.04"
             host_name:  "Linux"
@@ -32,11 +32,11 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: DiligentGraphics/github-action/checkout@v28
+      uses: DiligentGraphics/github-action/checkout@v34
 
     - name: Set up build environment
       if:   success()
-      uses: DiligentGraphics/github-action/setup-build-env@v28
+      uses: DiligentGraphics/github-action/setup-build-env@v34
       with:
         platform: Web
 
@@ -80,14 +80,29 @@ jobs:
 
     - name: Configure CMake
       if:   success()
-      uses: DiligentGraphics/github-action/configure-cmake@v28
+      uses: DiligentGraphics/github-action/configure-cmake@v34
       with:
         build-type: ${{ matrix.build_type }}
-        cmake-args: ${{ matrix.cmake_args }} ${{ env.RADIENT_BINDINGS_CMAKE_ARGS }}
+        cmake-args: ${{ matrix.cmake_args }} ${{ env.RADIENT_BINDINGS_CMAKE_ARGS }} -DDILIGENT_BUILD_FX_TESTS=ON -DDILIGENT_EMSCRIPTEN_STRIP_DEBUG_INFO=ON
 
     - name: Build
+      id: build
       if:   success()
-      uses: DiligentGraphics/github-action/build@v28
+      uses: DiligentGraphics/github-action/build@v34
+
+    - name: Test Radient CPU in Chrome
+      if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+      timeout-minutes: 20
+      uses: DiligentGraphics/github-action/run-radient-cpu-browser-tests@v34
+      with:
+        artifact-name: RadientCPU-Chrome-${{runner.os}}-${{matrix.build_type}}
+
+    - name: Test Radient WebGPU in Chrome
+      if: ${{ !cancelled() && runner.os != 'macOS' && steps.build.outcome == 'success' }}
+      timeout-minutes: 20
+      uses: DiligentGraphics/github-action/run-radient-gpu-browser-tests@v34
+      with:
+        artifact-name: RadientWebGPU-Chrome-${{runner.os}}-${{matrix.build_type}}
 
     - name: Build Radient bindings
       if: runner.os == 'Linux'
@@ -120,9 +135,9 @@ jobs:
         ref: ${{env.DILIGENT_GLTF_SAMPLE_ASSETS_COMMIT}}
         path: glTF-Sample-Assets
 
-    - name: Test Radient bindings in Chrome
+    - name: Test Radient JavaScript bindings and render goldens in Chrome
       if: runner.os == 'Linux'
-      uses: DiligentGraphics/github-action/run-radient-browser-tests@v29
+      uses: DiligentGraphics/github-action/run-radient-render-browser-tests@v34
       with:
         models-path: ${{github.workspace}}/glTF-Sample-Assets
         assets-path: ${{github.workspace}}/DiligentTestData
