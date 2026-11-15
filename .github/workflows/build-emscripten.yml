@@ -32,11 +32,11 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: DiligentGraphics/github-action/checkout@v34
+      uses: DiligentGraphics/github-action/checkout@v35
 
     - name: Set up build environment
       if:   success()
-      uses: DiligentGraphics/github-action/setup-build-env@v34
+      uses: DiligentGraphics/github-action/setup-build-env@v35
       with:
         platform: Web
 
@@ -80,7 +80,7 @@ jobs:
 
     - name: Configure CMake
       if:   success()
-      uses: DiligentGraphics/github-action/configure-cmake@v34
+      uses: DiligentGraphics/github-action/configure-cmake@v35
       with:
         build-type: ${{ matrix.build_type }}
         cmake-args: ${{ matrix.cmake_args }} ${{ env.RADIENT_BINDINGS_CMAKE_ARGS }} -DDILIGENT_BUILD_FX_TESTS=ON -DDILIGENT_EMSCRIPTEN_STRIP_DEBUG_INFO=ON
@@ -88,19 +88,19 @@ jobs:
     - name: Build
       id: build
       if:   success()
-      uses: DiligentGraphics/github-action/build@v34
+      uses: DiligentGraphics/github-action/build@v35
 
     - name: Test Radient CPU in Chrome
       if: ${{ !cancelled() && steps.build.outcome == 'success' }}
       timeout-minutes: 20
-      uses: DiligentGraphics/github-action/run-radient-cpu-browser-tests@v34
+      uses: DiligentGraphics/github-action/run-radient-cpu-browser-tests@v35
       with:
         artifact-name: RadientCPU-Chrome-${{runner.os}}-${{matrix.build_type}}
 
     - name: Test Radient WebGPU in Chrome
       if: ${{ !cancelled() && runner.os != 'macOS' && steps.build.outcome == 'success' }}
       timeout-minutes: 20
-      uses: DiligentGraphics/github-action/run-radient-gpu-browser-tests@v34
+      uses: DiligentGraphics/github-action/run-radient-gpu-browser-tests@v35
       with:
         artifact-name: RadientWebGPU-Chrome-${{runner.os}}-${{matrix.build_type}}
 
@@ -137,7 +137,7 @@ jobs:
 
     - name: Test Radient JavaScript bindings and render goldens in Chrome
       if: runner.os == 'Linux'
-      uses: DiligentGraphics/github-action/run-radient-render-browser-tests@v34
+      uses: DiligentGraphics/github-action/run-radient-render-browser-tests@v35
       with:
         models-path: ${{github.workspace}}/glTF-Sample-Assets
         assets-path: ${{github.workspace}}/DiligentTestData

@@ -59,25 +59,25 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: DiligentGraphics/github-action/checkout@v28
+      uses: DiligentGraphics/github-action/checkout@v35
 
     - name: Set up build environment
       if:   success()
-      uses: DiligentGraphics/github-action/setup-build-env@v28
+      uses: DiligentGraphics/github-action/setup-build-env@v35
       with:
         platform: ${{ matrix.platform }}
 
     - name: Configure CMake
       if:   success()
-      uses: DiligentGraphics/github-action/configure-cmake@v28
+      uses: DiligentGraphics/github-action/configure-cmake@v35
       with:
         build-type: ${{ matrix.build_type }}
         cmake-args: ${{ matrix.cmake_args }}
 
     - name: Build
       if:   success()
-      uses: DiligentGraphics/github-action/build@v28
+      uses: DiligentGraphics/github-action/build@v35
 
     - name: RadientTest
       if:   ${{ success() && matrix.platform == 'MacOS' }}
-      uses: DiligentGraphics/github-action/run-radient-tests@v28
+      uses: DiligentGraphics/github-action/run-radient-tests@v35
