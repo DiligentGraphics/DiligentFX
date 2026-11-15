@@ -81,7 +81,7 @@ bool WaitForMeshDrawableStatus(IRadientMeshAsset* pMesh,
         if (pUploadManager != nullptr && pContext != nullptr)
             PumpUploadManager(*pUploadManager, *pContext);
 
-        std::this_thread::sleep_for(1ms);
+        TestingEnvironment::YieldExecution(1);
     }
 
     return RadientMeshAssetManager::GetDrawableMesh(pMesh, true).Status == ExpectedStatus;
@@ -95,7 +95,7 @@ bool WaitForMeshLoadStatus(IRadientMeshAsset* pMesh,
         if (RadientMeshAssetManager::GetLoadStatus(pMesh) == ExpectedStatus)
             return true;
 
-        std::this_thread::sleep_for(1ms);
+        TestingEnvironment::YieldExecution(1);
     }
 
     return RadientMeshAssetManager::GetLoadStatus(pMesh) == ExpectedStatus;
@@ -350,7 +350,7 @@ TEST(RadientMeshAssetManagerGPUTest, RejectsOversizedVertexStreamsBeforeAllocati
             while (RadientMeshAssetManager::GetLoadStatus(pVertices) == RADIENT_STATUS_PENDING &&
                    std::chrono::steady_clock::now() < Deadline)
             {
-                std::this_thread::sleep_for(1ms);
+                TestingEnvironment::YieldExecution(1);
             }
             ASSERT_EQ(RadientMeshAssetManager::GetLoadStatus(pVertices), RADIENT_STATUS_INVALID_ARGUMENT);
             pThreadPool->WaitForAllTasks();
@@ -873,7 +873,7 @@ TEST(RadientMeshAssetManagerGPUTest, MeshViewAcceptsPendingMorphTargetCacheHit)
             pResourceManager->GetMorphTargetBufferUsageStats().AllocationCount != 1) &&
            std::chrono::steady_clock::now() < AllocationDeadline)
     {
-        std::this_thread::sleep_for(1ms);
+        TestingEnvironment::YieldExecution(1);
     }
     ASSERT_EQ(pResourceManager->GetVertexPoolUsageStats().AllocationCount, 1u);
     ASSERT_EQ(pResourceManager->GetMorphTargetBufferUsageStats().AllocationCount, 1u);

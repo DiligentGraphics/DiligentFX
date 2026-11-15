@@ -28,6 +28,8 @@
 #include "Assets/RadientAssetCache.hpp"
 #undef DILIGENT_WEAK_OBJECT_CACHE_TEST_HOOKS
 
+#include "TestingEnvironment.hpp"
+
 #include "ThreadSignal.hpp"
 #include "gtest/gtest.h"
 
@@ -271,7 +273,7 @@ TEST(RadientAssetCacheTest, ConcurrentSameKeyCreationRunsOneFactory)
     FactoryEntered.Wait(true, 1);
 
     while (WaitersWaiting.load(std::memory_order_acquire) != ThreadCount - 1)
-        std::this_thread::yield();
+        Testing::TestingEnvironment::YieldExecution();
 
     FinishFactory.Trigger(true);
 

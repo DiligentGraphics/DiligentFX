@@ -778,7 +778,7 @@ TEST(RadientTextureAssetManagerTest, ConcurrentSameTextureLoadsSharePayload)
     }
 
     while (ReadyCount.load(std::memory_order_acquire) != ThreadCount)
-        std::this_thread::yield();
+        TestingEnvironment::YieldExecution();
 
     StartSignal.Trigger(true);
 

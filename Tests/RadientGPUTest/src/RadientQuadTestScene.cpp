@@ -379,7 +379,7 @@ void RadientQuadTestScene::RenderUntilReady(IRadientMaterialAsset* pEditedMateri
         Status = RenderFrame();
         ASSERT_FALSE(RADIENT_FAILED(Status));
         if (Status == RADIENT_STATUS_PENDING)
-            std::this_thread::sleep_for(std::chrono::milliseconds{1});
+            TestingEnvironment::YieldExecution(1);
     }
     ASSERT_EQ(Status, RADIENT_STATUS_OK);
     ASSERT_EQ(RenderFrame(), RADIENT_STATUS_OK);

@@ -170,7 +170,7 @@ TEST(RadientMaterialSRBTableTest, ConcurrentAcquireReusesEntry)
     }
 
     while (ReadyCount.load(std::memory_order_acquire) != RequestCount)
-        std::this_thread::yield();
+        Testing::TestingEnvironment::YieldExecution();
     StartSignal.Trigger(true);
 
     for (std::thread& Thread : Threads)

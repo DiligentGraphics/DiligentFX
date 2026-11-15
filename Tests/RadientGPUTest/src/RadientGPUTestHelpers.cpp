@@ -25,6 +25,7 @@
  */
 
 #include "RadientGPUTestHelpers.hpp"
+#include "TestingEnvironment.hpp"
 #include "Assets/RadientAssetManagerImpl.hpp"
 #include "RadientTypesX.hpp"
 
@@ -287,7 +288,7 @@ RADIENT_STATUS WaitForSceneGPUResources(RadientAssetManagerImpl& AssetManager,
         const RADIENT_STATUS Status = RadientAssetManagerImpl::GetSceneGPUResourceStatus(pScene);
         if (Status != RADIENT_STATUS_PENDING)
             return Status;
-        std::this_thread::sleep_for(std::chrono::milliseconds{1});
+        TestingEnvironment::YieldExecution(1);
     } while (std::chrono::steady_clock::now() < Deadline);
     return RadientAssetManagerImpl::GetSceneGPUResourceStatus(pScene);
 }
@@ -316,7 +317,7 @@ bool WaitForTextureManagerIdle(const RadientTextureAssetManagerSharedPtr& Manage
             PumpUploadManager(UploadManager, Context);
 
         // Avoid busy-waiting while asynchronous texture work is in progress.
-        std::this_thread::sleep_for(1ms);
+        TestingEnvironment::YieldExecution(1);
     } while (std::chrono::steady_clock::now() < Deadline);
 
     return IsTextureManagerIdle(Manager->GetStats());
@@ -333,7 +334,7 @@ bool WaitForPendingCopyCommandEnqueueCallbacks(const RadientTextureAssetManagerS
         if (Stats.PendingCopyCommandEnqueueCallbacks != 0)
             return true;
 
-        std::this_thread::sleep_for(1ms);
+        TestingEnvironment::YieldExecution(1);
     } while (std::chrono::steady_clock::now() < Deadline);
 
     return Manager->GetStats().PendingCopyCommandEnqueueCallbacks != 0;

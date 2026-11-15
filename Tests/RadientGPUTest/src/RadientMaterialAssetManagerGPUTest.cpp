@@ -647,7 +647,7 @@ TEST(RadientMaterialAssetManagerGPUTest, InitialShaderDataMustBeValidatedAfterWo
         pAssetManager->UpdateGPUResources(pDevice, pContext);
         pContext->Flush();
         pContext->FinishFrame();
-        std::this_thread::yield();
+        TestingEnvironment::YieldExecution();
     }
     ASSERT_EQ(RadientMaterialAssetManager::GetGPUResourceStatus(pMaterial), RADIENT_STATUS_OK);
 
@@ -674,7 +674,7 @@ TEST(RadientMaterialAssetManagerGPUTest, InitialShaderDataMustBeValidatedAfterWo
         const std::chrono::steady_clock::time_point PublicationDeadline =
             std::chrono::steady_clock::now() + std::chrono::seconds{10};
         while (!pGatedMaterial->IsPublished() && std::chrono::steady_clock::now() < PublicationDeadline)
-            std::this_thread::yield();
+            TestingEnvironment::YieldExecution();
         ASSERT_TRUE(pGatedMaterial->IsPublished());
         ASSERT_EQ(Result.Data->GetStatus(), RADIENT_STATUS_OK);
         ASSERT_EQ(Result.Data->GetGPUResourceStatus(), RADIENT_STATUS_PENDING);
@@ -759,7 +759,7 @@ TEST(RadientMaterialAssetManagerGPUTest, UpdatesShaderDataInEachRendererWithoutR
         pAssetManager->UpdateGPUResources(pDevice, pContext);
         pContext->Flush();
         pContext->FinishFrame();
-        std::this_thread::sleep_for(std::chrono::milliseconds{1});
+        TestingEnvironment::YieldExecution(1);
     }
     ASSERT_EQ(RadientMaterialAssetManager::GetGPUResourceStatus(pMaterial), RADIENT_STATUS_OK);
 

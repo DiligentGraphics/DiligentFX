@@ -87,7 +87,7 @@ bool WaitForPendingCopyCommandEnqueueCallbacks(RadientAssetManagerImpl& AssetMan
         if (Stats.PendingCopyCommandEnqueueCallbacks != 0)
             return true;
 
-        std::this_thread::sleep_for(1ms);
+        TestingEnvironment::YieldExecution(1);
     } while (std::chrono::steady_clock::now() < Deadline);
 
     return AssetManager.GetTextureManagerStats().PendingCopyCommandEnqueueCallbacks != 0;
@@ -116,7 +116,7 @@ bool WaitForTextureManagerIdle(RadientAssetManagerImpl& AssetManager,
         }
 
         // Avoid busy-waiting while asynchronous texture work is in progress.
-        std::this_thread::sleep_for(1ms);
+        TestingEnvironment::YieldExecution(1);
     } while (std::chrono::steady_clock::now() < Deadline);
 
     const RadientTextureAssetManagerStats Stats = AssetManager.GetTextureManagerStats();

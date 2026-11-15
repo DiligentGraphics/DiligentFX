@@ -29,7 +29,7 @@
 #include "RadientAssets.h"
 #include "ThreadPool.h"
 
-#include <thread>
+#include "TestingEnvironment.hpp"
 
 namespace Diligent
 {
@@ -50,7 +50,7 @@ inline RADIENT_STATUS WaitForAssetLoad(IRadientAsset* pAsset, IThreadPool& Threa
             return Status;
 
         if (!ThreadPool.ProcessTask(0, false))
-            std::this_thread::yield();
+            TestingEnvironment::YieldExecution();
     }
 }
 
