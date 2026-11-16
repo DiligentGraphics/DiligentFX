@@ -9,9 +9,10 @@ import unittest
 ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(ROOT / "BuildTools/Bindings"))
 from javascript.generate import Generator
+from configuration import load_config
 
 MODEL = json.loads(Path(sys.argv.pop(1)).read_text(encoding="utf-8"))
-ADAPTERS = json.loads((Path(__file__).resolve().parents[1] / "API.json").read_text(encoding="utf-8"))
+ADAPTERS = load_config(Path(__file__).resolve().parents[1] / "API.json")
 
 
 class RadientGenerationTest(unittest.TestCase):

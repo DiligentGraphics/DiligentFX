@@ -8,13 +8,14 @@ import sys
 ROOT = Path(__file__).resolve().parents[6]
 sys.path.insert(0, str(ROOT / "BuildTools/Bindings"))
 from generate import build_model
+from configuration import load_config
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--target", required=True)
 parser.add_argument("--clang-arg", action="append", default=[])
 parser.add_argument("--output", type=Path, required=True)
 args = parser.parse_args()
-config = json.loads((ROOT / "Radient/bindings/API.json").read_text(encoding="utf-8"))
+config = load_config(ROOT / "Radient/bindings/javascript/Model.json")
 header = "Radient/bindings/javascript/tests/browser/render/NativeCapture.h"
 config["headers"].append(header)
 config["exports"]["headers"].append(header)

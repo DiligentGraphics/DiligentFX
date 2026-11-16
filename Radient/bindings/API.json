@@ -3,13 +3,11 @@
   "conventions": "diligent",
   "headers": [
     "Radient/interface/Radient.h",
-    "Radient/bindings/javascript/BrowserNative.h",
     "../DiligentCore/Common/interface/ThreadPool.h"
   ],
   "exports": {
     "headers": [
-      "Radient/interface/*.h",
-      "Radient/bindings/javascript/BrowserNative.h"
+      "Radient/interface/*.h"
     ],
     "exclude_headers": [
       "Radient/interface/RadientAssetResolver.h",
@@ -74,8 +72,8 @@
     "Diligent::IRadientEngine": {
       "exclude_methods": ["GetBackend"]
     },
-    "Diligent::IDeviceContext": {"binding": "external", "reason": "The browser adapter supplies the native graphics context."},
-    "Diligent::ISwapChain": {"binding": "external", "reason": "The browser adapter owns the canvas swap chain."},
+    "Diligent::IDeviceContext": {"binding": "external", "reason": "A platform adapter supplies the native graphics context."},
+    "Diligent::ISwapChain": {"binding": "external", "reason": "A platform adapter supplies the native swap chain."},
     "Diligent::ITextureView": {"binding": "external", "reason": "Native texture views are supplied by the platform adapter."},
     "Diligent::IRadientRenderTarget": {
       "exclude_methods": ["GetColorRTV", "GetDepthDSV", "GetSwapChain"],

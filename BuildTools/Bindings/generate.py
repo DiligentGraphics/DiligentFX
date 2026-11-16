@@ -8,6 +8,7 @@ import sys
 
 from binding_model import ModelError, apply_policies, validate_binding, validate_keys, validate_method_selection
 from clang_parser import extract_api
+from configuration import load_config
 
 
 def build_model(source_root, config, target, clang_args=()):
@@ -65,7 +66,7 @@ def main():
     args = parser.parse_args()
 
     try:
-        config = json.loads(args.config.read_text(encoding="utf-8"))
+        config = load_config(args.config)
         model = build_model(args.source_root, config, args.target, args.clang_arg)
         output = json.dumps(model, indent=2, ensure_ascii=False) + "\n"
         args.output.parent.mkdir(parents=True, exist_ok=True)

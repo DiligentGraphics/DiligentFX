@@ -24,21 +24,15 @@
  *  of the possibility of such damages.
  */
 
-#include "NativeAdapters.hpp"
-#include "../../include/Assets/RadientMaterialDefinitionImpl.hpp"
+#pragma once
+
+#include "RadientMaterials.h"
 
 namespace Diligent
 {
 namespace RadientBindings
 {
-Uint64 GetMaterialDefaultByteCount(const RadientMaterialParameterDesc& Desc)
-{
-    if (Desc.pDefaultValue == nullptr)
-        return 0;
-
-    Uint32 Size = 0;
-    RadientMaterialDetail::GetMaterialParameterDataSize(Desc, Size);
-    return Size;
-}
+// Counts are computed natively so language wrappers never need to know ABI sizes or addresses.
+Uint64 GetMaterialDefaultByteCount(const RadientMaterialParameterDesc& Desc);
 } // namespace RadientBindings
 } // namespace Diligent

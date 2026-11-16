@@ -3,7 +3,7 @@
 The shared generator extracts an explicitly selected API with Clang, attaches
 semantic metadata, and produces a language-neutral JSON model. The JavaScript
 backend generates Wasm glue, wrappers, and TypeScript declarations from that model.
-The Radient selection covers owning data blobs and scene editing in `Radient/bindings/API.json`.
+The Radient selection covers assets, animation, scene editing, and rendering in `Radient/bindings/API.json`.
 
 The public headers are the signature source. Clang expands Diligent's interface
 macros and supplies types, inheritance, enum values, documentation, and native
@@ -19,6 +19,11 @@ of Radient declarations and language-specific generation:
   model plus available symbol names. It is the only module that uses libclang.
 - `binding_model.py` validates and attaches semantic policies. It can work with
   the extracted model or with JSON loaded in a process without Clang installed.
+- `binding_api.py` prepares a backend's selected API without modifying the model.
+  It validates scoped-byte, fixed-argument, and field-count adapters and shares
+  inherited-member lookup, scalar classification, and native C++ type spelling.
+  It has no dependency on JavaScript, Wasm, or Clang.
+- `configuration.py` loads common configuration with optional backend extensions.
 - `generate.py` composes these stages and writes the model artifact. Header
   selection, preprocessor definitions, and binding policies come from configuration.
 - `tests/` contains focused enum, struct, interface, function, constant, and typedef
@@ -144,6 +149,23 @@ These model tests parse their own fixtures and do not require building the model
 artifact first. CTest never builds artifacts automatically.
 
 ## Metadata and model
+
+Configuration files may use `"extends": "relative/path.json"` to reuse a shared
+configuration. The base filename is resolved relative to the extending file;
+API header paths remain relative to the source root. Objects merge recursively,
+`clang_args` concatenate verbatim to preserve compiler-option ordering and repeated
+tokens. Other lists append entries not present in the base, and other values replace
+the base value. Cycles are rejected, and the assembled configuration goes through the same
+model or adapter validation as a standalone file.
+
+Radient's `bindings/API.json` contains its platform-independent API selection and
+contracts. `bindings/Adapters.json` describes owning-blob access contracts and
+native material-size queries. The latter are implemented in
+`bindings/NativeAdapters.*`; each backend supplies its own scoped-access runtime.
+`bindings/javascript/Model.json` extends the API selection with browser entry
+points; `bindings/javascript/API.json` extends the portable adapters with the
+JavaScript exclusions. A new backend can reuse the common files without pulling
+in the browser API or JavaScript emitter.
 
 The configuration has a version, entry headers relative to the supplied source root,
 optional Clang arguments, an `exports` list of fully qualified API entry points,

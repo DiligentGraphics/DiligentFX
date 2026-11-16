@@ -29,9 +29,11 @@ On Windows, use the environment's `Scripts/python.exe` and LLVM's
 `bin/libclang.dll`. `RADIENT_BINDINGS_NODE_EXECUTABLE` can select Node explicitly.
 Node 18 or newer is required.
 
-`Radient-GenerateBindingModel` extracts the native API, and
-`Radient-GenerateJavaScript` consumes that model with the JavaScript configuration
-in `API.json`. `RadientWasm` compiles the generated wrapper and links the
+`Radient-GenerateBindingModel` extracts the platform-independent native API.
+`Radient-GenerateJavaScript` extracts its browser extension through `Model.json`
+and emits wrappers using the adapter configuration in `API.json`. Both files
+extend shared configuration in the parent directory. `RadientWasm` compiles the
+generated wrapper and links the
 existing `Radient` library. Build `RadientWasm` to generate and compile all
 required artifacts, then run CTest separately for the model, generation, and Node
 integration tests. CTest never generates or rebuilds artifacts. Use `ctest -N` to
@@ -201,8 +203,10 @@ const browser = await createRadientBrowser({
 
 `Radient/bindings/API.json` selects entry points and supplies semantic overrides;
 referenced types, ordinary reference policies, and inherited interface ownership
-are discovered automatically. The adjacent `javascript/API.json` defines JavaScript
-adaptations. The Wasm target links the production Radient library.
+are discovered automatically. `javascript/Model.json` adds browser-specific
+entry points. Portable adapters live in `bindings/Adapters.json` and
+`bindings/NativeAdapters.*`; `javascript/API.json` adds JavaScript exclusions.
+The Wasm target links the production Radient library.
 In addition to owning data blobs, it exposes engine/scene creation and scene writers
 for entity names, hierarchy, visibility, and transforms. `CreateRadientEngine`
 creates an engine without a GPU backend; use the browser adapter for WebGPU.

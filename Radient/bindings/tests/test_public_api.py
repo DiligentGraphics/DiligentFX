@@ -8,7 +8,9 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "BuildTools/Bindings"))
+from binding_api import BindingAPI
 from binding_model import unalias
+from configuration import load_config
 from clang_parser import extract_api
 from generate import build_model
 
@@ -28,6 +30,30 @@ def extract_public(headers, names):
 
 
 class PublicAPITest(unittest.TestCase):
+    def test_shared_model_and_browser_extension(self):
+        config = load_config(ROOT / "Radient/bindings/API.json")
+        shared_model = build_model(ROOT, config, API_TARGET, CLANG_ARGS)
+        shared = declarations(shared_model)
+        self.assertTrue(all("/javascript/" not in d["source"]["file"] for d in shared.values()))
+        self.assertNotIn("Diligent::CreateRadientBrowserEngine", shared)
+
+        browser_config = load_config(ROOT / "Radient/bindings/javascript/Model.json")
+        browser = declarations(build_model(ROOT, browser_config, API_TARGET, CLANG_ARGS))
+        self.assertIn("Diligent::CreateRadientBrowserEngine", browser)
+        for name, declaration in shared.items():
+            self.assertEqual(browser[name], declaration, name)
+        self.assertTrue(all(d["source"]["file"].endswith("BrowserNative.h")
+                            for name, d in browser.items() if name not in shared))
+
+        # Portable adapter contracts work on native targets without a JS emitter.
+        api = BindingAPI(shared_model, load_config(ROOT / "Radient/bindings/Adapters.json"))
+        self.assertFalse(api.scopes["Diligent::IRadientDataBlob::BeginRead"]["writable"])
+        self.assertTrue(api.scopes["Diligent::IRadientMutableDataBlob::BeginWrite"]["writable"])
+        self.assertEqual(api.fixed_arguments["Diligent::CreateRadientDataBlob"]["StorageMode"],
+                         "Diligent::RADIENT_DATA_BLOB_STORAGE_MODE_COPY")
+        self.assertEqual(api.field_count_functions["Diligent::RadientMaterialParameterDesc::pDefaultValue"],
+                         "Diligent::RadientBindings::GetMaterialDefaultByteCount")
+
     def test_data_blob_contract(self):
         config = json.loads((ROOT / "Radient/bindings/API.json").read_text(encoding="utf-8"))
         self.assertTrue(all(Path(header).suffix == ".h" for header in config["headers"]))

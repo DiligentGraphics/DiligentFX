@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "field_policies": {
+    "Diligent::RadientDataBlobCreateInfo": {
+      "pData": {
+        "binding": "automatic"
+      }
+    },
+    "Diligent::RadientMaterialParameterDesc": {
+      "pDefaultValue": {
+        "binding": "automatic"
+      }
+    }
+  },
+  "fixed_arguments": {
+    "Diligent::CreateRadientDataBlob": {
+      "StorageMode": "Diligent::RADIENT_DATA_BLOB_STORAGE_MODE_COPY"
+    }
+  },
+  "scoped_bytes": {
+    "Diligent::IRadientDataBlob::BeginRead": {
+      "release": "EndRead",
+      "size": "GetSize",
+      "success": 0
+    },
+    "Diligent::IRadientMutableDataBlob::BeginWrite": {
+      "release": "EndWrite",
+      "size": "GetSize",
+      "success": 0
+    }
+  },
+  "field_count_functions": {
+    "Diligent::RadientMaterialParameterDesc::pDefaultValue": "Diligent::RadientBindings::GetMaterialDefaultByteCount"
+  }
+}

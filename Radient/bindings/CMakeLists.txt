@@ -98,6 +98,12 @@ set_tests_properties(Bindings-Model Radient-BindingModel PROPERTIES LABELS "Bind
 
 set_target_properties(Radient-GenerateBindingModel PROPERTIES FOLDER "DiligentFX/Bindings")
 
+# Compile portable semantic adapters with Radient so all language backends can
+# reuse its private type-size helpers without exposing them in generated glue.
+if(TARGET Radient)
+    target_sources(Radient PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/NativeAdapters.cpp")
+endif()
+
 # JavaScript bindings link the production library. Standalone configurations
 # provide only model generation and tests, without building Radient's dependencies.
 if(EMSCRIPTEN AND TARGET Radient)

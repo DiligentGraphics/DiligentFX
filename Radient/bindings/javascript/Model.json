@@ -1,0 +1,7 @@
+{
+  "extends": "../API.json",
+  "headers": ["Radient/bindings/javascript/BrowserNative.h"],
+  "exports": {
+    "headers": ["Radient/bindings/javascript/BrowserNative.h"]
+  }
+}

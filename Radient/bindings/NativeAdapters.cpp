@@ -24,15 +24,21 @@
  *  of the possibility of such damages.
  */
 
-#pragma once
-
-#include "RadientMaterials.h"
+#include "NativeAdapters.hpp"
+#include "../include/Assets/RadientMaterialDefinitionImpl.hpp"
 
 namespace Diligent
 {
 namespace RadientBindings
 {
-// Counts are computed natively so JS never needs to know ABI sizes or addresses.
-Uint64 GetMaterialDefaultByteCount(const RadientMaterialParameterDesc& Desc);
+Uint64 GetMaterialDefaultByteCount(const RadientMaterialParameterDesc& Desc)
+{
+    if (Desc.pDefaultValue == nullptr)
+        return 0;
+
+    Uint32 Size = 0;
+    RadientMaterialDetail::GetMaterialParameterDataSize(Desc, Size);
+    return Size;
+}
 } // namespace RadientBindings
 } // namespace Diligent
