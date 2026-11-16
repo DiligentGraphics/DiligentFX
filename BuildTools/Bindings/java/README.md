@@ -12,10 +12,17 @@ Generated sources are build artifacts. `generate.py` accepts `--model`, `--modul
 
 - Scalar values, aliases used in signatures, and typed enums. Enums become
   constant containers, preserving numeric values and allowing flags.
+- Scalar constants become Java `static final` compile-time constants. Integer,
+  boolean, floating-point, and enum values use the same Java types as parameters;
+  Uint64 constants preserve all bits in a signed Java `long`.
 - Descriptors with scalar, string, and nested descriptor fields. Construction
   obtains defaults from native C++ initialization, including incomplete defaults
   with null required fields. Required fields are checked when a descriptor is
   passed to native code and when native results are converted.
+- Fixed-size descriptor arrays of scalars, enums, descriptors, or nested arrays.
+  Each dimension must be non-null and have exactly the declared length. Defaults
+  and output arrays are independent Java snapshots; input arrays are copied into
+  the descriptor, with descriptor-element strings retained for the native call.
 - Ordinary UTF-8 strings, copied between native storage and Java UTF-16 strings.
   Nullability follows the model. Embedded NUL and invalid encodings are rejected.
 - Copied scalar/enum input arrays, borrowed array results, and caller-filled
@@ -54,9 +61,10 @@ If result conversion fails, all owned outputs are released before returning.
 
 This first backend does not yet cover the entire JavaScript surface. Unsupported
 shapes fail generation: callbacks, scoped byte access, interface inheritance,
-interface/array/pointer descriptor fields, fixed arrays, struct/interface arrays,
-computed counts, inout parameters, and standalone constant exports. Native default
-arguments may be present, but Java callers currently supply every input argument.
+interface/pointer descriptor fields, pointer-based struct/interface arrays,
+read-only fixed-array fields, computed counts, inout parameters, and non-scalar
+constant exports. Native default arguments may be present, but Java callers
+currently supply every input argument.
 Radient selection, packaging, Android integration, and rendering are later steps.
 
 ## Build and test

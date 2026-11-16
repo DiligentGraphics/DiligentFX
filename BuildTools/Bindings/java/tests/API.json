@@ -7,7 +7,9 @@
     "fixtures/StringMarshalling.h",
     "fixtures/Arrays.h",
     "fixtures/Interfaces.h",
-    "fixtures/JavaNames.h"
+    "fixtures/JavaNames.h",
+    "fixtures/FixedArrays.h",
+    "fixtures/Constants.h"
   ],
   "exports": {
     "headers": [
@@ -209,6 +211,18 @@
       "result": {
         "nullable": true,
         "length": "Count",
+        "lifetime": "static"
+      }
+    },
+    "Diligent::TestFixedChild": {
+      "fields": {
+        "Label": {
+          "nullable": false
+        }
+      }
+    },
+    "Diligent::GetIncompleteFixedArrays": {
+      "result": {
         "lifetime": "static"
       }
     }

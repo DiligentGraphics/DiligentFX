@@ -3,6 +3,7 @@
 
 import argparse
 import json
+import math
 from pathlib import Path
 import re
 import sys
@@ -62,7 +63,7 @@ class Generator(BindingAPI):
             if name in self.native_only or declaration["kind"] in ("external", "typedef"):
                 continue
             short = identifier(name.rsplit("::", 1)[-1])
-            if short in self.names or short in {module, "State", "NativeObject", "java"}:
+            if short in self.names or short in {module, "State", "NativeObject", "CLEANER", "java"}:
                 raise ModelError(f"Java: ambiguous declaration name {short}")
             self.names[short] = name
         self.records = [d for d in self.types.values() if d["kind"] == "record"]
@@ -87,6 +88,18 @@ class Generator(BindingAPI):
             raise ModelError("Java: volatile and manual declarations require an adapter")
         if {"length_method", "length_from"} & p.keys():
             raise ModelError("Java: computed array lengths are not implemented yet")
+        if t["kind"] == "array":
+            if "length" in p:
+                raise ModelError("Java: fixed arrays use their declared extent, not a length policy")
+            if not isinstance(t["count"], int) or not 0 < t["count"] <= 0x7fffffff:
+                raise ModelError("Java: fixed array extent must be positive and fit jsize")
+            element = unalias(t["element"])
+            if t["const"] or element["const"]:
+                raise ModelError("Java: fixed array descriptor fields require writable elements")
+            element_kind, _ = self.shape({"type": element})
+            if element_kind not in ("scalar", "record", "fixed_array") or element["kind"] in ("pointer", "reference", "void"):
+                raise ModelError("Java: fixed arrays support scalars, descriptors, and nested arrays")
+            return "fixed_array", t
         if t["kind"] in ("pointer", "reference"):
             target = unalias(t["target"])
             if "length" in p:
@@ -115,6 +128,10 @@ class Generator(BindingAPI):
         kind, t = self.shape(value)
         if kind == "scalar":
             return self.scalar_info(t)
+        if kind == "fixed_array":
+            java, jni, sig, suffix = self.info({"type": t["element"]})
+            array_jni = jni + "Array" if self.shape({"type": t["element"]})[0] == "scalar" else "jobjectArray"
+            return java + "[]", array_jni, "[" + sig, "Object"
         if kind == "array":
             java, jni, sig, suffix = self.scalar_info(t)
             return java + "[]", jni + "Array", "[" + sig, "Object"
@@ -162,6 +179,8 @@ class Generator(BindingAPI):
         if kind == "record":
             for field in self.record_fields(target["name"]):
                 self.validate_input(field, target["name"] + "::" + field["name"])
+        elif kind == "fixed_array":
+            self.validate_input({"type": target["element"]}, context + "[]")
 
     def read(self, value, expr, var, count=None):
         kind, t = self.shape(value)
@@ -203,6 +222,64 @@ class Generator(BindingAPI):
                 f"for (jsize Index = 0; Index < {var}Count; ++Index)",
                 f"    {var}[Index] = ReadScalar<{native}>(Env, {var}Java[static_cast<size_t>(Index)]);"], var + ".get()"
 
+    def read_fixed_array(self, t, expr, destination, var, storage):
+        count = t["count"]
+        element = {"type": t["element"]}
+        kind, native = self.shape(element)
+        _, jni, _, suffix = self.info(element)
+        index = var + "Index"
+        lines = [f'Require(Env, {expr} != nullptr, "Required fixed array is null");',
+                 f'Require(Env, Env->GetArrayLength({expr}) == {count}, "Fixed array has incorrect length");']
+        if kind == "scalar":
+            # Bound temporary stack storage independently of the native array size.
+            # Small arrays still use one stack buffer and a single JNI region call.
+            capacity = min(count, 256)
+            offset, size = var + "Offset", var + "Size"
+            body = [f"const jsize {size} = std::min<jsize>({count} - {offset}, {capacity});",
+                    f"Env->Get{suffix}ArrayRegion({expr}, {offset}, {size}, {var}Data.data());", "Check(Env);",
+                    f"for (jsize {index} = 0; {index} < {size}; ++{index})", "{",
+                    f"    {destination}[{offset} + {index}] = ReadScalar<{mutable_type(native)}>(Env, {var}Data[{index}]);", "}",
+                    f"{offset} += {size};"]
+            return lines + [f"std::array<{jni}, {capacity}> {var}Data{{}};",
+                            f"for (jsize {offset} = 0; {offset} < {count};)", "{", self.indent(body, 4), "}"]
+        else:
+            item = var + "Item"
+            body = [f"const LocalRef<{jni}> {item}{{Env, static_cast<{jni}>(Env->GetObjectArrayElement({expr}, {index}))}};", "Check(Env);"]
+            if kind == "fixed_array":
+                body += self.read_fixed_array(native, item + ".Get()", destination + f"[{index}]", item, storage + f"[{index}]")
+            else:
+                body += [f"Read{self.short(native['name'])}(Env, {item}.Get(), {storage}[{index}]);",
+                         f"{destination}[{index}] = {storage}[{index}].Value;"]
+        return lines + [f"for (jsize {index} = 0; {index} < {count}; ++{index})", "{", self.indent(body, 4), "}"]
+
+    def write_fixed_array(self, t, expr, var, validate_required):
+        count = t["count"]
+        element = {"type": t["element"]}
+        kind, native = self.shape(element)
+        _, jni, sig, suffix = self.info(element)
+        array_jni = self.info({"type": t})[1]
+        index = var + "Index"
+        if kind == "scalar":
+            # Match input conversion: widening elements must not exhaust the JVM stack.
+            capacity = min(count, 256)
+            offset, size = var + "Offset", var + "Size"
+            body = [f"const jsize {size} = std::min<jsize>({count} - {offset}, {capacity});",
+                    f"for (jsize {index} = 0; {index} < {size}; ++{index})", "{",
+                    f"    {var}Data[{index}] = WriteScalar<{jni}>({expr}[{offset} + {index}]);", "}",
+                    f"Env->Set{suffix}ArrayRegion({var}.Get(), {offset}, {size}, {var}Data.data());", "Check(Env);",
+                    f"{offset} += {size};"]
+            lines = [f"const LocalRef<{array_jni}> {var}{{Env, Env->New{suffix}Array({count})}};", "Check(Env);",
+                     f"std::array<{jni}, {capacity}> {var}Data{{}};",
+                     f"for (jsize {offset} = 0; {offset} < {count};)", "{", self.indent(body, 4), "}"]
+        else:
+            class_name = sig[1:-1] if kind == "record" else sig
+            lines = [f'const LocalRef<jclass> {var}Class{{Env, Env->FindClass("{class_name}")}};', "Check(Env);",
+                     f"const LocalRef<jobjectArray> {var}{{Env, Env->NewObjectArray({count}, {var}Class.Get(), nullptr)}};", "Check(Env);"]
+            body, converted = self.write(element, expr + f"[{index}]", var + "Item", validate_required=validate_required)
+            body += [f"Env->SetObjectArrayElement({var}.Get(), {index}, {converted});", "Check(Env);"]
+            lines += [f"for (jsize {index} = 0; {index} < {count}; ++{index})", "{", self.indent(body, 4), "}"]
+        return lines, var + ".Get()"
+
     def write(self, value, expr, var, count=None, owner=None, validate_required="true"):
         kind, t = self.shape(value)
         java, jni, sig, suffix = self.info(value)
@@ -211,6 +288,8 @@ class Generator(BindingAPI):
             raise ModelError("Java: owned raw storage requires a release adapter")
         if kind == "scalar":
             return [f"const {jni} {var} = WriteScalar<{jni}>({expr});"], var
+        if kind == "fixed_array":
+            return self.write_fixed_array(t, expr, var, validate_required)
         if kind == "string":
             lines = []
             if not value.get("policy", {}).get("nullable", False):
@@ -255,7 +334,7 @@ class Generator(BindingAPI):
             member = identifier(field["name"])
             kind, t = self.shape(field)
             java, jni, sig, suffix = self.info(field)
-            if kind not in ("scalar", "string", "record") or unalias(field["type"])["kind"] == "reference":
+            if kind not in ("scalar", "string", "record", "fixed_array") or unalias(field["type"])["kind"] == "reference":
                 raise ModelError(f"Java: unsupported descriptor field {name}::{member}")
             if kind == "record" and unalias(field["type"])["kind"] == "pointer":
                 raise ModelError("Java: descriptor pointer fields are not implemented yet")
@@ -272,6 +351,19 @@ class Generator(BindingAPI):
                     read += [f'Require(Env, FieldValue{index}.Get() != nullptr || {nullable}, "Required string field is null");',
                              f"Out.Storage{index} = FieldValue{index}.Get() ? ReadString(Env, FieldValue{index}.Get()) : std::string{{}};",
                              f"Out.Value.{member} = FieldValue{index}.Get() ? Out.Storage{index}.c_str() : nullptr;"]
+                elif kind == "fixed_array":
+                    # Keep each descriptor element's strings alive through the native call.
+                    # Heap-back the entire element storage so its duplicate native values
+                    # do not add another potentially large array to the JVM stack.
+                    leaf, dimensions = t, []
+                    while leaf["kind"] == "array":
+                        dimensions.append(leaf["count"])
+                        leaf = unalias(leaf["element"])
+                    if self.shape({"type": leaf})[0] == "record":
+                        storage_type = f"Input{self.short(leaf['name'])}[]" + "".join(f"[{count}]" for count in dimensions[1:])
+                        storage.append(f"std::unique_ptr<{storage_type}> Storage{index} = std::make_unique<{storage_type}>({dimensions[0]});")
+                    read += self.read_fixed_array(t, f"FieldValue{index}.Get()", "Out.Value." + member,
+                                                  "Array" + str(index), f"Out.Storage{index}")
                 else:
                     child = self.short(t["name"])
                     storage.append(f"Input{child} Storage{index};")
@@ -323,6 +415,8 @@ static inline void Write{short}Fields(JNIEnv* Env, jobject Object, const {name}&
         for parameter in fn["parameters"]:
             if parameter.get("policy", {}).get("direction", "in") != "out":
                 self.validate_input(parameter, qualified + "::" + parameter["name"])
+        if any(self.shape(value)[0] == "fixed_array" for value in [fn["result"], *fn["parameters"]]):
+            raise ModelError("Java: fixed arrays are supported in descriptor fields")
         fixed = self.fixed_arguments.get(qualified, {})
         if owner:
             short = self.short(owner)
@@ -450,9 +544,27 @@ static inline void Write{short}Fields(JNIEnv* Env, jobject Object, const {name}&
         signature = f"public {'static ' if not owner else ''}{result_info[0]} {name}({public_args})"
         return signature + " { " + ("return " if result_info[0] != "void" else "") + native + "(" + ", ".join(call_args) + "); }"
 
+    def scalar_literal(self, t, value):
+        java = self.scalar_info(t)[0]
+        if java == "boolean":
+            return "true" if value else "false"
+        if java in ("float", "double"):
+            value = float(value)
+            if not math.isfinite(value):
+                member = "NaN" if math.isnan(value) else "POSITIVE_INFINITY" if value > 0 else "NEGATIVE_INFINITY"
+                return f"java.lang.{'Float' if java == 'float' else 'Double'}.{member}"
+            # Hexadecimal literals preserve the extracted value, including signed
+            # zero and subnormals, without depending on decimal formatting.
+            return value.hex() + ("f" if java == "float" else "")
+        if java == "long":
+            if value >= 2 ** 63:
+                value -= 2 ** 64
+            return str(value) + "L"
+        return str(value)
+
     def generate(self):
         includes = "\n".join('#include "' + h + '"' for h in self.headers)
-        self.cpp.append('// Generated; do not edit.\n#include "JNIRuntime.hpp"\n' + includes + '\nusing namespace DiligentBindings;\n')
+        self.cpp.append('// Generated; do not edit.\n#include "JNIRuntime.hpp"\n#include <algorithm>\n#include <array>\n' + includes + '\nusing namespace DiligentBindings;\n')
         scalar_types = {}
         def collect(value):
             if isinstance(value, dict):
@@ -475,6 +587,8 @@ static inline void Write{short}Fields(JNIEnv* Env, jobject Object, const {name}&
             visited.add(d["name"])
             for f in self.record_fields(d["name"]):
                 kind, t = self.shape(f)
+                while kind == "fixed_array":
+                    kind, t = self.shape({"type": t["element"]})
                 if kind == "record":
                     record(self.types[t["name"]])
             self.emit_record(d)
@@ -485,14 +599,17 @@ static inline void Write{short}Fields(JNIEnv* Env, jobject Object, const {name}&
                 info = self.scalar_info(d["underlying_type"])
                 values = []
                 for value in d["values"]:
-                    number = value["value"]
-                    if info[0] == "long" and number >= 2 ** 63:
-                        number -= 2 ** 64
-                    values.append(f"public static final {info[0]} {identifier(value['name'])} = {number}{'L' if info[0] == 'long' else ''};")
+                    literal = self.scalar_literal(d["underlying_type"], value["value"])
+                    values.append(f"public static final {info[0]} {identifier(value['name'])} = {literal};")
                 short = self.short(d["name"])
                 self.java.append(f"    public static final class {short} {{\n        private {short}() {{}}\n{self.indent(values, 8)}\n    }}\n")
             elif d["kind"] == "constant":
-                raise ModelError("Java: standalone constants are not implemented yet")
+                if d.get("policy", {}).get("binding", "automatic") != "automatic":
+                    raise ModelError(f"Java: manual constant requires an adapter: {d['name']}")
+                info = self.scalar_info(d["type"])
+                if not info or info[0] == "void":
+                    raise ModelError(f"Java: only scalar constants are supported: {d['name']}")
+                self.java.append(f"    public static final {info[0]} {self.short(d['name'])} = {self.scalar_literal(d['type'], d['value'])};\n")
             elif d["kind"] == "function":
                 self.java.append("    " + self.emit_function(d) + "\n")
         for index, d in enumerate(self.interfaces):

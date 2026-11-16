@@ -148,6 +148,60 @@ class GenerationTest(unittest.TestCase):
         with self.assertRaisesRegex(backend.ModelError, "reserved module"):
             backend.Generator(MODEL, "java", "example.api", "FixtureJNI", ["API.h"])
 
+    def test_rejects_invalid_fixed_array_extents(self):
+        for count in (0, -1, 2 ** 31):
+            with self.subTest(count=count):
+                model = deepcopy(MODEL)
+                declaration(model, "TestFixedArrays")["fields"][0]["type"]["count"] = count
+                with self.assertRaisesRegex(backend.ModelError, "extent"):
+                    generate(model)
+
+    def test_rejects_fixed_array_length_policy(self):
+        declaration(self.model, "TestFixedArrays")["fields"][0].setdefault("policy", {})["length"] = 8
+        with self.assertRaisesRegex(backend.ModelError, "declared extent"):
+            generate(self.model)
+
+    def test_rejects_unsupported_fixed_array_elements(self):
+        pointer = deepcopy(declaration(MODEL, "EchoText")["parameters"][0]["type"])
+        scalar = deepcopy(declaration(MODEL, "TestFixedArrays")["fields"][0]["type"]["element"])
+        for element, error in ((pointer, "fixed arrays support"),
+                               (dict(scalar, const=True), "writable elements"),
+                               (dict(scalar, volatile=True), "volatile")):
+            with self.subTest(element=element):
+                model = deepcopy(MODEL)
+                declaration(model, "TestFixedArrays")["fields"][0]["type"]["element"] = element
+                with self.assertRaisesRegex(backend.ModelError, error):
+                    generate(model)
+
+    def test_rejects_retained_strings_in_fixed_descriptor_arrays(self):
+        field = next(f for f in declaration(self.model, "TestFixedChild")["fields"] if f["name"] == "Label")
+        field["policy"]["lifetime"] = "object"
+        with self.assertRaisesRegex(backend.ModelError, "TestFixedChild::Label.*call lifetime"):
+            generate(self.model)
+
+    def test_rejects_non_scalar_constants(self):
+        types = [declaration(MODEL, "EchoText")["result"]["type"],
+                 declaration(MODEL, "TestFixedArrays")["fields"][0]["type"],
+                 declaration(MODEL, "TestDesc")["fields"][4]["type"]]
+        for native_type in types:
+            with self.subTest(native_type=native_type):
+                model = deepcopy(MODEL)
+                declaration(model, "TestConstantInvalidID")["type"] = deepcopy(native_type)
+                with self.assertRaisesRegex(backend.ModelError, "only scalar constants"):
+                    generate(model)
+
+    def test_rejects_manual_constant_without_adapter(self):
+        declaration(self.model, "TestConstantInvalidID")["policy"] = {
+            "binding": "manual", "reason": "The constant needs a language adapter."
+        }
+        with self.assertRaisesRegex(backend.ModelError, "manual constant requires an adapter.*TestConstantInvalidID"):
+            generate(self.model)
+
+    def test_rejects_constant_runtime_name_collision(self):
+        declaration(self.model, "TestConstantInvalidID")["name"] = "Diligent::CLEANER"
+        with self.assertRaisesRegex(backend.ModelError, "ambiguous declaration"):
+            generate(self.model)
+
     def test_rejects_java_keywords(self):
         declaration(self.model, "EchoInt8")["parameters"][0]["name"] = "switch"
         with self.assertRaisesRegex(backend.ModelError, "unsupported identifier"):
