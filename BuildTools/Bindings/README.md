@@ -3,6 +3,8 @@
 The shared generator extracts an explicitly selected API with Clang, attaches
 semantic metadata, and produces a language-neutral JSON model. The JavaScript
 backend generates Wasm glue, wrappers, and TypeScript declarations from that model.
+The [Java backend](java/README.md) generates Java classes and native JNI glue, with
+a standalone marshalling conformance suite.
 The Radient selection covers assets, animation, scene editing, and rendering in `Radient/bindings/API.json`.
 
 The public headers are the signature source. Clang expands Diligent's interface

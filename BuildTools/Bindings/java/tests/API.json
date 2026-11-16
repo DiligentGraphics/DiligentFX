@@ -1,0 +1,216 @@
+{
+  "schema_version": 1,
+  "conventions": "diligent",
+  "headers": [
+    "fixtures/Scalars.h",
+    "fixtures/Descriptors.h",
+    "fixtures/StringMarshalling.h",
+    "fixtures/Arrays.h",
+    "fixtures/Interfaces.h",
+    "fixtures/JavaNames.h"
+  ],
+  "exports": {
+    "headers": [
+      "fixtures/*.h"
+    ]
+  },
+  "declarations": {
+    "Diligent::IObject": {
+      "binding": "external",
+      "reason": "JNI wrappers retain native interface references.",
+      "ownership": "reference_counted"
+    },
+    "Diligent::TEST_STATUS": {
+      "role": "status"
+    },
+    "Diligent::TestDesc": {
+      "fields": {
+        "Name": {
+          "nullable": false
+        }
+      }
+    },
+    "Diligent::EchoOptionalDesc": {
+      "parameters": {
+        "pDesc": {
+          "nullable": true
+        }
+      },
+      "result": {
+        "nullable": true
+      }
+    },
+    "Diligent::EchoOptionalText": {
+      "result": {
+        "nullable": true
+      }
+    },
+    "Diligent::GetInvalidText": {
+      "result": {
+        "lifetime": "static"
+      }
+    },
+    "Diligent::SumValues": {
+      "parameters": {
+        "pValues": {
+          "length": "Count"
+        }
+      }
+    },
+    "Diligent::SumBytes": {
+      "parameters": {
+        "pValues": {
+          "length": "Count"
+        }
+      }
+    },
+    "Diligent::EchoValues": {
+      "parameters": {
+        "pValues": {
+          "length": "Count"
+        }
+      },
+      "result": {
+        "length": "Count"
+      }
+    },
+    "Diligent::EchoBools": {
+      "parameters": {
+        "pValues": {
+          "length": "Count"
+        }
+      },
+      "result": {
+        "length": "Count"
+      }
+    },
+    "Diligent::EchoDoubles": {
+      "parameters": {
+        "pValues": {
+          "length": "Count"
+        }
+      },
+      "result": {
+        "length": "Count"
+      }
+    },
+    "Diligent::EchoWideValues": {
+      "parameters": {
+        "pValues": {
+          "length": "Count"
+        }
+      },
+      "result": {
+        "length": "Count"
+      }
+    },
+    "Diligent::FillValues": {
+      "parameters": {
+        "pValues": {
+          "length": "Capacity",
+          "written": "Written"
+        }
+      }
+    },
+    "Diligent::InvalidWrittenCount": {
+      "parameters": {
+        "pValues": {
+          "length": "Capacity",
+          "written": "Written"
+        }
+      }
+    },
+    "Diligent::FailingCounterOutputs": {
+      "parameters": {
+        "ppText": {
+          "lifetime": "static"
+        }
+      }
+    },
+    "Diligent::EchoSignedBytes": {
+      "parameters": {
+        "pValues": {
+          "length": "Count"
+        }
+      },
+      "result": {
+        "length": "Count"
+      }
+    },
+    "Diligent::EchoFloats": {
+      "parameters": {
+        "pValues": {
+          "length": "Count"
+        }
+      },
+      "result": {
+        "length": "Count"
+      }
+    },
+    "Diligent::EchoModes": {
+      "parameters": {
+        "pValues": {
+          "length": "Count"
+        }
+      },
+      "result": {
+        "length": "Count"
+      }
+    },
+    "Diligent::BorrowCounterOutput": {
+      "parameters": {
+        "ppCounter": {
+          "ownership": "borrowed",
+          "lifetime": "object"
+        }
+      }
+    },
+    "Diligent::RequiredDesc": {
+      "fields": {
+        "Name": {
+          "nullable": false
+        }
+      }
+    },
+    "Diligent::GetIncompleteDesc": {
+      "result": {
+        "lifetime": "static"
+      }
+    },
+    "Diligent::HasRequiredArrayStorage": {
+      "parameters": {
+        "pValues": {
+          "nullable": false,
+          "length": "Count"
+        }
+      }
+    },
+    "Diligent::IsNullArray": {
+      "parameters": {
+        "pValues": {
+          "nullable": true,
+          "length": "Count"
+        }
+      }
+    },
+    "Diligent::EchoOptionalValues": {
+      "parameters": {
+        "pValues": {
+          "nullable": true,
+          "length": "Count"
+        }
+      },
+      "result": {
+        "nullable": true,
+        "length": "Count"
+      }
+    },
+    "Diligent::GetNullArray": {
+      "result": {
+        "nullable": true,
+        "length": "Count",
+        "lifetime": "static"
+      }
+    }
+  }
+}
