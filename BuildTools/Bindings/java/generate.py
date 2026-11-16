@@ -284,7 +284,7 @@ class Generator(BindingAPI):
     {name} Value{{}};
 {self.indent(storage, 4)}
 }};
-static inline void Read{short}(JNIEnv* Env, jobject Object, Input{short}& Out)
+[[maybe_unused]] static inline void Read{short}(JNIEnv* Env, jobject Object, Input{short}& Out)
 {{
     Require(Env, Object != nullptr, "Required descriptor is null");
 {self.indent(read, 4)}
@@ -294,7 +294,7 @@ static inline void Write{short}Fields(JNIEnv* Env, jobject Object, const {name}&
     (void)ValidateRequiredFields;
 {self.indent(write, 4)}
 }}
-static inline jobject Write{short}(JNIEnv* Env, const {name}& Value, bool ValidateRequiredFields)
+[[maybe_unused]] static inline jobject Write{short}(JNIEnv* Env, const {name}& Value, bool ValidateRequiredFields)
 {{
     jobject Object = NewObject(Env, "{self.path}${short}", true);
     Write{short}Fields(Env, Object, Value, ValidateRequiredFields);
