@@ -18,9 +18,8 @@ Generated sources are build artifacts. `generate.py` accepts `--model`, `--modul
 - Scalar constants become Java `static final` compile-time constants. Integer,
   boolean, floating-point, and enum values use the same Java types as parameters;
   Uint64 constants preserve all bits in a signed Java `long`.
-- Descriptors with scalar, string, interface, interface-array, and nested
-  descriptor fields, preserving
-  single inheritance and covariant interface returns. Construction
+- Descriptors with scalar, string, interface, nested descriptor, and pointer/count
+  array fields, preserving single inheritance and covariant interface returns. Construction
   obtains defaults from native C++ initialization, including incomplete defaults
   with null required fields. Required fields are checked when a descriptor is
   passed to native code and when native results are converted.
@@ -30,8 +29,12 @@ Generated sources are build artifacts. `generate.py` accepts `--model`, `--modul
   the descriptor, with descriptor-element strings retained for the native call.
 - Ordinary UTF-8 strings, copied between native storage and Java UTF-16 strings.
   Nullability follows the model. Embedded NUL and invalid encodings are rejected.
-- Copied scalar/enum/interface input arrays, borrowed array results, and caller-filled
-  output arrays with explicit capacity and optional written count.
+- Copied scalar/enum/interface/descriptor input arrays, borrowed array results,
+  and caller-filled output arrays with explicit capacity and optional written count.
+  Pointer/count descriptor fields support the same element types. Native struct
+  arrays use contiguous heap storage; nested strings, arrays, and interfaces stay
+  alive until the call and all result conversion finish. Returned arrays are
+  independent snapshots, including nested descriptor data.
 - Scalar and descriptor output pointers/references, and multiple outputs.
 - Reference-counted interfaces with single inheritance, owned and borrowed
   interface outputs, and interface pointer/reference inputs. Generated Java
@@ -82,8 +85,8 @@ original wrapper's ownership.
 
 This first backend does not yet cover the entire JavaScript surface. Unsupported
 shapes fail generation: callbacks, scoped byte access, multiple interface bases,
-descriptor-pointer fields, pointer-based struct arrays and scalar-array fields,
-read-only fixed-array fields, computed counts, inout parameters, and non-scalar
+descriptor-pointer fields, recursive descriptor graphs, read-only fixed-array
+fields, computed counts, inout parameters, and non-scalar
 constant exports. Native default arguments may be present, but Java callers
 currently supply every input argument.
 Radient selection, packaging, Android integration, and rendering are later steps.

@@ -107,4 +107,36 @@ void CopyInterfaceArray(IMarshalObject* const* ppObjects, Uint32 Count, IMarshal
     }
 }
 
+Uint64 SumInterfaceDescriptors(const MarshalInterfaceDesc* pItems, Uint32 Count)
+{
+    Uint64 Sum = 0;
+    for (Uint32 Index = 0; Index < Count; ++Index)
+    {
+        Sum += SumInterfaces(pItems[Index]);
+    }
+    return Sum;
+}
+
+const MarshalInterfaceArrayDesc& EchoInterfaceDescriptors(const MarshalInterfaceArrayDesc& Desc, Bool InvalidLabel)
+{
+    if (!InvalidLabel)
+        return Desc;
+    // Fail after retaining every borrowed reference in the dynamic array.
+    static MarshalInterfaceArrayDesc Result;
+    Result       = Desc;
+    Result.Label = "\xED\xA0\x80";
+    return Result;
+}
+
+void FillInterfaceDescriptors(const MarshalInterfaceDesc& Source, Uint32 Capacity, MarshalInterfaceDesc* pItems, Uint32& Written, Bool InvalidCount)
+{
+    Written = Capacity < 2 ? Capacity : 2;
+    for (Uint32 Index = 0; Index < Written; ++Index)
+    {
+        pItems[Index] = Source;
+    }
+    if (InvalidCount)
+        Written = Capacity + 1;
+}
+
 } // namespace Diligent

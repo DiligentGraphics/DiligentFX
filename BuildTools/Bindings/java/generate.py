@@ -137,8 +137,9 @@ class Generator(BindingAPI):
             target = unalias(t["target"])
             if "length" in p:
                 info = self.scalar_info(target)
-                if (not info or info[0] == "void") and not self.interface_element(target):
-                    raise ModelError("Java: arrays currently require scalar, enum, or interface elements")
+                record = self.types.get(target.get("name"), {}).get("kind") == "record"
+                if (not info or info[0] == "void") and not self.interface_element(target) and not record:
+                    raise ModelError("Java: arrays require scalar, enum, interface, or descriptor elements")
                 return "array", target
             if target.get("kind") == "scalar" and target.get("name") in ("char_s", "char_u") and target["const"]:
                 return "string", target
@@ -167,7 +168,7 @@ class Generator(BindingAPI):
             return java + "[]", array_jni, "[" + sig, "Object"
         if kind == "array":
             java, jni, sig, suffix = self.info({"type": t})
-            array_jni = "jobjectArray" if self.interface_element(t) else jni + "Array"
+            array_jni = jni + "Array" if self.scalar_info(t) else "jobjectArray"
             return java + "[]", array_jni, "[" + sig, "Object"
         if kind == "string":
             return "java.lang.String", "jstring", "Ljava/lang/String;", "Object"
@@ -215,6 +216,8 @@ class Generator(BindingAPI):
                 self.validate_input(field, target["name"] + "::" + field["name"])
         elif kind == "fixed_array":
             self.validate_input({"type": target["element"]}, context + "[]")
+        elif kind == "array" and self.shape({"type": target})[0] == "record":
+            self.validate_input({"type": target}, context + "[]")
 
     def read(self, value, expr, var, count=None):
         kind, t = self.shape(value)
@@ -239,26 +242,55 @@ class Generator(BindingAPI):
         if kind == "interface":
             lines = [f"Owned<{t['name']}> {var};", f'ReadInterface(Env, {expr}, {var}, "{self.state_signature}", {nullable}, {self.interface_casts[t["name"]]});']
             return lines, ("*" if unalias(value["type"])["kind"] == "reference" else "") + var + ".Ptr"
+        lines = [f"{self.array_storage(t)} {var};"] + self.read_array(value, expr, var, count, var)
+        return lines, self.array_data(t, var)
+
+    def array_storage(self, element):
+        interface = self.interface_element(element)
+        if interface:
+            return f"InterfaceArray<{interface['name']}>"
+        if self.scalar_info(element):
+            return f"std::unique_ptr<{mutable_type(element)}[]>"
+        return f"DescriptorArray<{mutable_type(element)}, Input{self.short(element['name'])}>"
+
+    def array_data(self, element, storage):
+        if self.interface_element(element):
+            return storage + ".Data()"
+        if self.scalar_info(element):
+            return storage + ".get()"
+        return storage + ".Values.get()"
+
+    def read_array(self, value, expr, storage, count, var):
         if count is None:
             raise ModelError("Java: array requires an explicit count")
-        element = self.interface_element(t)
-        if element:
-            return [f"InterfaceArray<{element['name']}> {var};",
-                    self.read_interface_array(value, element, expr, count, var)], var + ".Data()"
-        java, jni, sig, suffix = self.scalar_info(t)
+        _, t = self.shape(value)
+        interface = self.interface_element(t)
+        if interface:
+            return [self.read_interface_array(value, interface, expr, count, storage)]
+        nullable = str(value.get("policy", {}).get("nullable", False)).lower()
         native = mutable_type(t)
         # Required arrays normalize null with count zero to non-null empty storage.
         allocation = f"new {native}[static_cast<size_t>({var}Count)]{{}}"
         if value.get("policy", {}).get("nullable", False):
             allocation = f"{expr} ? {allocation} : nullptr"
-        return [f'Require(Env, {expr} != nullptr || {nullable} || {count} == 0, "Nonempty array is null");',
-                f"const jsize {var}Count = {expr} ? ArrayCount(Env, {count}) : 0;",
-                f'if ({expr}) Require(Env, Env->GetArrayLength({expr}) >= {var}Count, "Array is shorter than its count");',
-                f"std::vector<{jni}> {var}Java(static_cast<size_t>({var}Count));",
-                f"if ({var}Count) Env->Get{suffix}ArrayRegion({expr}, 0, {var}Count, {var}Java.data());", "Check(Env);",
-                f"std::unique_ptr<{native}[]> {var}({allocation});",
-                f"for (jsize Index = 0; Index < {var}Count; ++Index)",
-                f"    {var}[Index] = ReadScalar<{native}>(Env, {var}Java[static_cast<size_t>(Index)]);"], var + ".get()"
+        lines = [f'Require(Env, {expr} != nullptr || {nullable} || {count} == 0, "Nonempty array is null");',
+                 f"const jsize {var}Count = {expr} ? ArrayCount(Env, {count}) : 0;",
+                 f'if ({expr}) Require(Env, Env->GetArrayLength({expr}) >= {var}Count, "Array is shorter than its count");']
+        scalar = self.scalar_info(t)
+        if scalar:
+            _, jni, _, suffix = scalar
+            return lines + [f"std::vector<{jni}> {var}Java(static_cast<size_t>({var}Count));",
+                            f"if ({var}Count) Env->Get{suffix}ArrayRegion({expr}, 0, {var}Count, {var}Java.data());", "Check(Env);",
+                            f"{storage}.reset({allocation});",
+                            f"for (jsize Index = 0; Index < {var}Count; ++Index)",
+                            f"    {storage}[Index] = ReadScalar<{native}>(Env, {var}Java[static_cast<size_t>(Index)]);"]
+        child = self.short(t["name"])
+        return lines + [f"{storage}.Values.reset({allocation});",
+                        f"if ({var}Count) {storage}.Elements = std::make_unique<Input{child}[]>({var}Count);",
+                        f"for (jsize Index = 0; Index < {var}Count; ++Index)", "{",
+                        f"    const LocalRef<jobject> Item{{Env, Env->GetObjectArrayElement({expr}, Index)}};",
+                        f"    Read{child}(Env, Item.Get(), {storage}.Elements[Index]);",
+                        f"    {storage}.Values[Index] = {storage}.Elements[Index].Value;", "}"]
 
     def read_interface_array(self, value, element, expr, count, storage):
         nullable = str(value.get("policy", {}).get("nullable", False)).lower()
@@ -374,12 +406,19 @@ class Generator(BindingAPI):
                     f'"{self.path}${self.short(element["name"])}", "{self.state_signature}", '
                     f'{nullable}, {element_nullable}, {validate_required})}};'], var + ".Get()"
         elem = self.scalar_info(t)
-        nullable = value.get("policy", {}).get("nullable", False)
-        allocation = f"Env->New{elem[3]}Array({var}Count)"
-        if nullable:
-            allocation = f"{expr} ? {allocation} : nullptr"
-        return [f'Require(Env, {expr} != nullptr || {str(nullable).lower()} || {count} == 0, "Native function returned a null array");',
-                f"const jsize {var}Count = {expr} ? ArrayCount(Env, {count}) : 0;",
+        nullable = str(value.get("policy", {}).get("nullable", False)).lower()
+        lines = [f'Require(Env, !{validate_required} || {expr} != nullptr || {nullable} || {count} == 0, "Native function returned a null array");',
+                 f"const jsize {var}Count = {expr} ? ArrayCount(Env, {count}) : 0;"]
+        # Constructors preserve incomplete defaults, just as interface-array fields do.
+        absent = f"({expr} == nullptr && ({nullable} || !{validate_required}))"
+        if not elem:
+            lines += [f'const LocalRef<jclass> {var}Class{{Env, Env->FindClass("{self.path}${self.short(t["name"])}")}};',
+                      f"const LocalRef<jobjectArray> {var}{{Env, {absent} ? nullptr : Env->NewObjectArray({var}Count, {var}Class.Get(), nullptr)}};"]
+            body, item = self.write({"type": t}, f"{expr}[Index]", var + "Item", validate_required=validate_required)
+            body += [f"Env->SetObjectArrayElement({var}.Get(), Index, {item});", "Check(Env);"]
+            return lines + [f"for (jsize Index = 0; Index < {var}Count; ++Index)", "{", self.indent(body, 4), "}"], var + ".Get()"
+        allocation = f"{absent} ? nullptr : Env->New{elem[3]}Array({var}Count)"
+        return lines + [
                 f"std::vector<{elem[1]}> {var}Data(static_cast<size_t>({var}Count));",
                 f"for (jsize Index = 0; Index < {var}Count; ++Index)",
                 f"    {var}Data[static_cast<size_t>(Index)] = WriteScalar<{elem[1]}>({expr}[Index]);",
@@ -398,8 +437,6 @@ class Generator(BindingAPI):
                 raise ModelError(f"Java: unsupported descriptor field {name}::{member}")
             if kind == "record" and unalias(field["type"])["kind"] == "pointer":
                 raise ModelError("Java: descriptor pointer fields are not implemented yet")
-            if kind == "array" and not self.interface_element(t):
-                raise ModelError("Java: pointer-based descriptor array fields currently require interface elements")
             # Read scalar counts and embedded descriptors before dependent array fields,
             # even when the count is declared after the pointer in the native struct.
             read = read_first if kind in ("scalar", "record") else read_fields
@@ -425,10 +462,9 @@ class Generator(BindingAPI):
                     read += [f'ReadInterface(Env, FieldValue{index}.Get(), Out.Storage{index}, "{self.state_signature}", {nullable}, {self.interface_casts[t["name"]]});',
                              f"Out.Value.{member} = Out.Storage{index}.Ptr;"]
                 elif kind == "array":
-                    element = self.interface_element(t)
-                    storage.append(f"InterfaceArray<{element['name']}> Storage{index};")
-                    read += [self.read_interface_array(field, element, f"FieldValue{index}.Get()", read_count, f"Out.Storage{index}"),
-                             f"Out.Value.{member} = Out.Storage{index}.Data();"]
+                    storage.append(f"{self.array_storage(t)} Storage{index};")
+                    read += self.read_array(field, f"FieldValue{index}.Get()", f"Out.Storage{index}", read_count, f"Array{index}")
+                    read.append(f"Out.Value.{member} = {self.array_data(t, f'Out.Storage{index}')};")
                 elif kind == "fixed_array":
                     # Keep each descriptor element's strings alive through the native call.
                     # Heap-back the entire element storage so its duplicate native values
@@ -728,20 +764,24 @@ static inline void Write{short}Fields(JNIEnv* Env, jobject Object, const {name}&
             self.cpp.append(f'static_assert(sizeof({name}) * 8 == {bits}, "Binding model ABI differs from the native compiler");')
         # Dependencies precede enclosing records; Clang declaration order is not
         # guaranteed to be dependency order in a selected API model.
-        visited = set()
+        visited, visiting = set(), set()
         def record(d):
             if d["name"] in visited:
                 return
-            visited.add(d["name"])
+            if d["name"] in visiting:
+                raise ModelError(f"Java: recursive descriptor storage requires an adapter: {d['name']}")
+            visiting.add(d["name"])
             for base in d.get("bases", []):
                 record(self.types[base])
             for f in self.record_fields(d["name"]):
                 kind, t = self.shape(f)
-                while kind == "fixed_array":
-                    kind, t = self.shape({"type": t["element"]})
+                while kind in ("fixed_array", "array"):
+                    kind, t = self.shape({"type": t["element"] if kind == "fixed_array" else t})
                 if kind == "record":
                     record(self.types[t["name"]])
             self.emit_record(d)
+            visiting.remove(d["name"])
+            visited.add(d["name"])
         for d in self.records:
             record(d)
         for d in self.types.values():

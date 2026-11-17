@@ -388,6 +388,16 @@ inline jsize ArrayCount(JNIEnv* Env, std::uint64_t Count)
     return static_cast<jsize>(Count);
 }
 
+// Native APIs index contiguous descriptors. Keep their conversion storage
+// separately so nested strings, arrays, and interfaces survive the entire call.
+// Both arrays stay on the heap regardless of the descriptor size or count.
+template <typename T, typename Storage>
+struct DescriptorArray
+{
+    std::unique_ptr<T[]>       Values;
+    std::unique_ptr<Storage[]> Elements;
+};
+
 // Contiguous native pointers and the references keeping their objects alive
 // share one allocation. Partially converted arrays release only acquired refs.
 template <typename T>

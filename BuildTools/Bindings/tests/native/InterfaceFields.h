@@ -58,6 +58,14 @@ struct MarshalRequiredInterfaceDesc
 };
 typedef struct MarshalRequiredInterfaceDesc MarshalRequiredInterfaceDesc;
 
+struct MarshalInterfaceArrayDesc
+{
+    const MarshalInterfaceDesc* pItems DEFAULT_INITIALIZER(nullptr);
+    Uint32 Count DEFAULT_INITIALIZER(0);
+    const Char* Label DEFAULT_INITIALIZER("interface array");
+};
+typedef struct MarshalInterfaceArrayDesc MarshalInterfaceArrayDesc;
+
 #include "DefineRefMacro.h"
 Uint64 DILIGENT_GLOBAL_FUNCTION(SumInterfaces)(const MarshalInterfaceDesc REF Desc);
 const MarshalInterfaceDesc REF DILIGENT_GLOBAL_FUNCTION(EchoInterfaces)(const MarshalInterfaceDesc REF Desc);
@@ -70,6 +78,9 @@ const MarshalInterfaceGroup REF DILIGENT_GLOBAL_FUNCTION(EchoInterfaceGroup)(con
 const MarshalRequiredInterfaceDesc REF DILIGENT_GLOBAL_FUNCTION(EchoRequiredInterfaces)(const MarshalRequiredInterfaceDesc REF Desc);
 const MarshalRequiredInterfaceDesc REF DILIGENT_GLOBAL_FUNCTION(GetRequiredInterfaceSnapshot)(const MarshalInterfaceDesc REF Desc);
 void DILIGENT_GLOBAL_FUNCTION(CopyInterfaceArray)(IMarshalObject* const* ppObjects, Uint32 Count, IMarshalObject** ppOutput, Uint32 Capacity, Uint32 REF Written);
+Uint64 DILIGENT_GLOBAL_FUNCTION(SumInterfaceDescriptors)(const MarshalInterfaceDesc* pItems, Uint32 Count);
+const MarshalInterfaceArrayDesc REF DILIGENT_GLOBAL_FUNCTION(EchoInterfaceDescriptors)(const MarshalInterfaceArrayDesc REF Desc, Bool InvalidLabel);
+void DILIGENT_GLOBAL_FUNCTION(FillInterfaceDescriptors)(const MarshalInterfaceDesc REF Source, Uint32 Capacity, MarshalInterfaceDesc* pItems, Uint32 REF Written, Bool InvalidCount);
 #include "UndefRefMacro.h"
 
 // clang-format on

@@ -318,6 +318,225 @@
           "element_nullable": true
         }
       }
+    },
+    "Diligent::MarshalArrayItem": {
+      "fields": {
+        "pValues": {
+          "length": "ValueCount"
+        },
+        "Name": {
+          "nullable": false
+        }
+      }
+    },
+    "Diligent::MarshalArrayDesc": {
+      "fields": {
+        "pItems": {
+          "length": "ItemCount"
+        },
+        "pSamples": {
+          "length": "SampleCount"
+        }
+      }
+    },
+    "Diligent::ReadArrayItem": {
+      "parameters": {
+        "pItems": {
+          "length": "Count"
+        }
+      }
+    },
+    "Diligent::GetArrayItemName": {
+      "parameters": {
+        "pItems": {
+          "length": "Count"
+        }
+      },
+      "result": {
+        "nullable": true
+      }
+    },
+    "Diligent::ReadArrayGroup": {
+      "parameters": {
+        "pGroups": {
+          "length": "Count"
+        }
+      }
+    },
+    "Diligent::MarshalOutputArrayItem": {
+      "fields": {
+        "pSamples": {
+          "length": "SampleCount"
+        }
+      }
+    },
+    "Diligent::MarshalOutputArrayGroup": {
+      "fields": {
+        "pItems": {
+          "lifetime": "object",
+          "length": "ItemCount"
+        }
+      }
+    },
+    "Diligent::MarshalOutputArrayDesc": {
+      "fields": {
+        "pInt8": {
+          "lifetime": "object",
+          "length": "Count",
+          "nullable": false
+        },
+        "pUint8": {
+          "lifetime": "object",
+          "length": "Count",
+          "nullable": false
+        },
+        "pInt16": {
+          "lifetime": "object",
+          "length": "Count",
+          "nullable": false
+        },
+        "pUint16": {
+          "lifetime": "object",
+          "length": "Count",
+          "nullable": false
+        },
+        "pInt32": {
+          "lifetime": "object",
+          "length": "Count",
+          "nullable": false
+        },
+        "pUint32": {
+          "lifetime": "object",
+          "length": "Count",
+          "nullable": false
+        },
+        "pInt64": {
+          "lifetime": "object",
+          "length": "Count",
+          "nullable": false
+        },
+        "pUint64": {
+          "lifetime": "object",
+          "length": "Count",
+          "nullable": false
+        },
+        "pFloat32": {
+          "lifetime": "object",
+          "length": "Count",
+          "nullable": false
+        },
+        "pFloat64": {
+          "lifetime": "object",
+          "length": "WideCount",
+          "nullable": false
+        },
+        "pBool": {
+          "lifetime": "object",
+          "length": "Count",
+          "nullable": false
+        },
+        "pMARSHAL_MODE": {
+          "lifetime": "object",
+          "length": "Count",
+          "nullable": false
+        },
+        "pChar": {
+          "lifetime": "object",
+          "length": "Count",
+          "nullable": false
+        },
+        "pGroups": {
+          "lifetime": "object",
+          "length": "GroupCount",
+          "nullable": false
+        }
+      }
+    },
+    "Diligent::MarshalArrayRoundTrip": {
+      "fields": {
+        "pItems": {
+          "length": "ItemCount"
+        },
+        "pValues": {
+          "length": "ValueCount"
+        },
+        "Name": {
+          "nullable": false
+        }
+      }
+    },
+    "Diligent::GetInvalidOutputArray": {
+      "result": {
+        "lifetime": "static"
+      }
+    },
+    "Diligent::GetStaticOutputArray": {
+      "result": {
+        "nullable": true,
+        "lifetime": "static",
+        "length": "Count"
+      }
+    },
+    "Diligent::MarshalOutputRecord": {
+      "fields": {
+        "Label": {
+          "lifetime": "static",
+          "nullable": false
+        }
+      }
+    },
+    "Diligent::FillRecords": {
+      "parameters": {
+        "pRecords": {
+          "length": "Capacity"
+        }
+      }
+    },
+    "Diligent::IMarshalArraySnapshots": {
+      "methods": {
+        "GetDesc": {
+          "result": {
+            "lifetime": "object"
+          }
+        },
+        "GetValues": {
+          "result": {
+            "lifetime": "object",
+            "length": "Count"
+          }
+        },
+        "GetItems": {
+          "result": {
+            "lifetime": "object",
+            "length": "Count"
+          }
+        }
+      }
+    },
+    "Diligent::MarshalInterfaceArrayDesc": {
+      "fields": {
+        "pItems": {
+          "length": "Count"
+        },
+        "Label": {
+          "nullable": false
+        }
+      }
+    },
+    "Diligent::SumInterfaceDescriptors": {
+      "parameters": {
+        "pItems": {
+          "length": "Count"
+        }
+      }
+    },
+    "Diligent::FillInterfaceDescriptors": {
+      "parameters": {
+        "pItems": {
+          "length": "Capacity",
+          "written": "Written"
+        }
+      }
     }
   }
 }

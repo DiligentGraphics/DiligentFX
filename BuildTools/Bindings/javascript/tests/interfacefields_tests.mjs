@@ -128,4 +128,39 @@ export function registerTests({test, assert, api}) {
         }
         assert.equal(api.GetLiveObjectCount(), baseline);
     });
+    test("dynamic descriptor arrays retain nested interfaces and roll back failures", () => {
+        const baseline = api.GetLiveObjectCount();
+        const object = api.CreateMarshalObject({Size: 19n}, 0, false).value;
+        const item = {pObject: object, ppObjects: [object, null], Count: 2};
+        const desc = {pItems: [item, item], Count: 2};
+        let snapshot, filled;
+        function dispose(items) {
+            for (const entry of items ?? []) {
+                entry.pObject?.dispose();
+                for (const value of entry.ppObjects ?? []) value?.dispose();
+            }
+        }
+        try {
+            assert.equal(api.SumInterfaceDescriptors(desc.pItems, 2), 76n);
+            assert.throws(() => api.EchoInterfaceDescriptors(desc, true), TypeError);
+            assert.throws(() => api.SumInterfaceDescriptors([item, {pObject: {}}], 2), TypeError);
+            assert.equal(object.GetRefCount(), 1);
+            assert.throws(() => api.FillInterfaceDescriptors(item, 1, true), RangeError);
+            assert.equal(object.GetRefCount(), 1);
+            snapshot = api.EchoInterfaceDescriptors(desc, false);
+            assert.equal(object.GetRefCount(), 5);
+            filled = api.FillInterfaceDescriptors(item, 5, false);
+            assert.equal(filled.Written, 2);
+            assert.equal(filled.pItems.length, 2);
+            assert.equal(object.GetRefCount(), 9);
+            object.dispose();
+            assert.equal(snapshot.pItems[1].ppObjects[0].GetSize(), 19n);
+            assert.equal(filled.pItems[1].pObject.GetSize(), 19n);
+        } finally {
+            object.dispose();
+            dispose(snapshot?.pItems);
+            dispose(filled?.pItems);
+        }
+        assert.equal(api.GetLiveObjectCount(), baseline);
+    });
 }

@@ -18,6 +18,9 @@
       "java/tests/fixtures/*.h"
     ],
     "include": [
+      "Diligent::SumInterfaceDescriptors",
+      "Diligent::EchoInterfaceDescriptors",
+      "Diligent::FillInterfaceDescriptors",
       "Diligent::EchoInterfaceArray",
       "Diligent::CopyInterfaceArray",
       "Diligent::GetRequiredInterfaceArray",
@@ -44,7 +47,19 @@
       "Diligent::ReadObjectReference",
       "Diligent::WriteObjectReference",
       "Diligent::BorrowObject",
-      "Diligent::BorrowObjectOutput"
+      "Diligent::BorrowObjectOutput",
+      "Diligent::ReadArrayItem",
+      "Diligent::GetArrayItemName",
+      "Diligent::ReadArrayDesc",
+      "Diligent::SumArraySamples",
+      "Diligent::ReadArrayGroup",
+      "Diligent::GetArrayCallCount",
+      "Diligent::CreateMarshalArraySnapshots",
+      "Diligent::GetLiveArraySnapshotCount",
+      "Diligent::EchoArrayDescriptor",
+      "Diligent::GetInvalidOutputArray",
+      "Diligent::GetStaticOutputArray",
+      "Diligent::FillRecords"
     ]
   },
   "declarations": {
@@ -74,6 +89,14 @@
           "lifetime": "static"
         }
       }
+    },
+    "Diligent::IMarshalArraySnapshots": {
+      "include_methods": [
+        "GetDesc",
+        "GetValues",
+        "GetItems",
+        "Update"
+      ]
     }
   }
 }

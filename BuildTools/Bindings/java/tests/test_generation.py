@@ -189,6 +189,32 @@ class GenerationTest(unittest.TestCase):
         with self.assertRaisesRegex(backend.ModelError, "release adapter"):
             generate(self.model)
 
+    def test_rejects_retained_data_in_dynamic_descriptor_arrays(self):
+        for field_name in ("Name", "pValues"):
+            with self.subTest(field=field_name):
+                model = deepcopy(MODEL)
+                field = next(f for f in declaration(model, "MarshalArrayItem")["fields"] if f["name"] == field_name)
+                field["policy"]["lifetime"] = "object"
+                with self.assertRaisesRegex(backend.ModelError, field_name + ".*call lifetime"):
+                    generate(model)
+
+    def test_rejects_owned_dynamic_descriptor_array_results(self):
+        method = next(m for m in declaration(self.model, "IMarshalArraySnapshots")["methods"] if m["name"] == "GetItems")
+        method["result"]["policy"]["ownership"] = "owned"
+        with self.assertRaisesRegex(backend.ModelError, "release adapter"):
+            generate(self.model)
+
+    def test_dynamic_descriptor_dependencies_ignore_declaration_order(self):
+        self.model["declarations"].reverse()
+        _, cpp = generate(self.model)
+        self.assertLess(cpp.index("struct InputMarshalArrayItem\n"), cpp.index("struct InputMarshalArrayDesc\n"))
+
+    def test_rejects_recursive_descriptor_arrays(self):
+        field = next(f for f in declaration(self.model, "MarshalArrayDesc")["fields"] if f["name"] == "pItems")
+        field["type"]["target"] = {"kind": "named", "name": "Diligent::MarshalArrayDesc", "const": True, "volatile": False}
+        with self.assertRaisesRegex(backend.ModelError, "recursive descriptor storage"):
+            generate(self.model)
+
     def test_output_only_borrowed_storage_can_have_object_lifetime(self):
         # The returned descriptor is copied while its native owner is still alive.
         self.model["declarations"] = [d for d in self.model["declarations"]
