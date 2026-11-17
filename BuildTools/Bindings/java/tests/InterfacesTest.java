@@ -52,6 +52,32 @@ public final class InterfacesTest {
             equal(0L, GetLiveCounterCount());
             throwsType(IllegalArgumentException.class, () -> ReadCounter(null));
         });
+        run("Interfaces.MultipleOutputsReleaseOnConversionFailure", () -> {
+            try (ITestCounter input = CreateCounter(53, TEST_STATUS.TEST_STATUS_OK).ppCounter) {
+                long destroyed = GetDestroyedCounterCount();
+                for (int i = 0; i < 3; ++i) {
+                    throwsType(IllegalArgumentException.class, () -> FailingMultipleCounterOutputs(input));
+                    equal(2L, input.GetRefCount());
+                    equal(1L, GetLiveCounterCount());
+                    equal(destroyed + i + 1, GetDestroyedCounterCount());
+                }
+            }
+            equal(0L, GetLiveCounterCount());
+        });
+        run("Interfaces.NativeExceptionsReleaseAssignedOutputs", () -> {
+            try (ITestCounter input = CreateCounter(59, TEST_STATUS.TEST_STATUS_OK).ppCounter) {
+                long destroyed = GetDestroyedCounterCount();
+                throwsType(RuntimeException.class, () -> ThrowCounterOutputs(input, false));
+                equal(2L, input.GetRefCount());
+                equal(1L, GetLiveCounterCount());
+                equal(destroyed + 1, GetDestroyedCounterCount());
+                throwsType(OutOfMemoryError.class, () -> ThrowCounterOutputs(input, true));
+                equal(2L, input.GetRefCount());
+                equal(1L, GetLiveCounterCount());
+                equal(destroyed + 2, GetDestroyedCounterCount());
+            }
+            equal(0L, GetLiveCounterCount());
+        });
         run("Interfaces.FailedOutputConversionReleasesReference", () -> {
             for (int i = 0; i < 100; ++i) {
                 throwsType(IllegalArgumentException.class, BindingTests::FailingCounterOutputs);

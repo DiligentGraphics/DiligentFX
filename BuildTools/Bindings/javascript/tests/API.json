@@ -148,6 +148,7 @@
       "Diligent::SumInherited",
       "Diligent::SumInterfaceArray",
       "Diligent::SumInterfaces",
+      "Diligent::GetInvalidInterfaceSnapshot",
       "Diligent::UpdateFixedArrays",
       "Diligent::WithDefaults",
       "Diligent::WriteObjectReference",

@@ -26,7 +26,20 @@
 
 #include "NativeExceptions.h"
 #include <stdexcept>
+#include <new>
 namespace Diligent
 {
 void ThrowNative() { throw std::runtime_error{"Fixture failure"}; }
+
+void ThrowCounterOutputs(ITestCounter* pCounter, Bool AllocationFailure, ITestCounter** ppFirst, ITestCounter** ppSecond)
+{
+    pCounter->AddRef();
+    *ppFirst = pCounter;
+    CreateCounter(43, TEST_STATUS_OK, ppSecond);
+    // Simulate native failure after acquiring resources, without exhausting memory.
+    if (AllocationFailure)
+        throw std::bad_alloc{};
+    throw std::runtime_error{"Fixture failure after assigning outputs"};
+}
+
 } // namespace Diligent

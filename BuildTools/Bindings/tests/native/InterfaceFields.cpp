@@ -49,4 +49,15 @@ const MarshalInterfaceDesc& EchoInterfaces(const MarshalInterfaceDesc& Desc)
     return Desc;
 }
 
+
+const MarshalInterfaceDesc& GetInvalidInterfaceSnapshot(const MarshalInterfaceDesc& Desc)
+{
+    // Snapshot conversion retains the interface field and array elements before
+    // reaching the malformed trailing string. All must be released on failure.
+    static MarshalInterfaceDesc Result;
+    Result       = Desc;
+    Result.Label = "\xED\xA0\x80";
+    return Result;
+}
+
 } // namespace Diligent

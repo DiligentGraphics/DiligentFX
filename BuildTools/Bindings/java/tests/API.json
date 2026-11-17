@@ -2,7 +2,8 @@
   "extends": "../../tests/native/API.json",
   "headers": [
     "java/tests/fixtures/JavaNames.h",
-    "java/tests/fixtures/NativeExceptions.h"
+    "java/tests/fixtures/NativeExceptions.h",
+    "java/tests/fixtures/Threading.h"
   ],
   "exports": {
     "headers": [
@@ -36,6 +37,13 @@
     "Diligent::GetIncompleteFixedArrays": {
       "result": {
         "lifetime": "static"
+      }
+    },
+    "Diligent::FailingMultipleCounterOutputs": {
+      "parameters": {
+        "ppText": {
+          "lifetime": "static"
+        }
       }
     }
   }

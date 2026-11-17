@@ -61,7 +61,7 @@ add_custom_target(Bindings-GenerateJavaTests
     COMMAND ${PYTHON_COMMAND} "${CMAKE_CURRENT_SOURCE_DIR}/generate.py"
         --model "${MODEL}" --module BindingTests --package diligent.bindings.tests
         --library BindingTestsJNI --header BindingTestAPI.h --header JavaNames.h
-        --header NativeExceptions.h --output "${GENERATED}"
+        --header NativeExceptions.h --header Threading.h --output "${GENERATED}"
     BYPRODUCTS "${MODEL}" "${GENERATED}/BindingTests.java" "${GENERATED}/BindingTests.cpp"
     COMMENT "Generating Java/JNI binding test API"
     VERBATIM)

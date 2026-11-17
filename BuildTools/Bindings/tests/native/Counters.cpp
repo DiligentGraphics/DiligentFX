@@ -32,11 +32,12 @@ namespace Diligent
 namespace
 {
 std::atomic<Uint32> LiveCounters{0};
+std::atomic<Uint32> DestroyedCounters{0};
 class TestCounter final : public ITestCounter
 {
 public:
     explicit TestCounter(Uint64 Value) : m_Value{Value} { ++LiveCounters; }
-    void DILIGENT_CALL_TYPE DILIGENT_CALL_TYPE   QueryInterface(const INTERFACE_ID&, IObject** ppObject) override { *ppObject = nullptr; }
+    void DILIGENT_CALL_TYPE                      QueryInterface(const INTERFACE_ID&, IObject** ppObject) override { *ppObject = nullptr; }
     ReferenceCounterValueType DILIGENT_CALL_TYPE AddRef() override { return ++m_References; }
     ReferenceCounterValueType DILIGENT_CALL_TYPE Release() override
     {
@@ -45,13 +46,17 @@ public:
             delete this;
         return Count;
     }
-    IReferenceCounters* DILIGENT_CALL_TYPE       GetReferenceCounters() const override { return nullptr; }
-    Uint64 DILIGENT_CALL_TYPE DILIGENT_CALL_TYPE GetValue() const override { return m_Value; }
-    void DILIGENT_CALL_TYPE DILIGENT_CALL_TYPE   SetValue(Uint64 Value) override { m_Value = Value; }
-    Uint32 DILIGENT_CALL_TYPE DILIGENT_CALL_TYPE GetRefCount() const override { return m_References; }
+    IReferenceCounters* DILIGENT_CALL_TYPE GetReferenceCounters() const override { return nullptr; }
+    Uint64 DILIGENT_CALL_TYPE              GetValue() const override { return m_Value; }
+    void DILIGENT_CALL_TYPE                SetValue(Uint64 Value) override { m_Value = Value; }
+    Uint32 DILIGENT_CALL_TYPE              GetRefCount() const override { return m_References; }
 
 private:
-    ~TestCounter() { --LiveCounters; }
+    ~TestCounter()
+    {
+        --LiveCounters;
+        ++DestroyedCounters;
+    }
     std::atomic<Uint32> m_References{1};
     Uint64              m_Value;
 };
@@ -71,4 +76,14 @@ void          FailingCounterOutputs(ITestCounter** ppCounter, const Char** ppTex
     *ppCounter = new TestCounter{42};
     *ppText    = "\xED\xA0\x80";
 }
+
+Uint32 GetDestroyedCounterCount() { return DestroyedCounters.load(); }
+void   FailingMultipleCounterOutputs(ITestCounter* pCounter, ITestCounter** ppFirst, ITestCounter** ppSecond, const Char** ppText)
+{
+    pCounter->AddRef();
+    *ppFirst  = pCounter;
+    *ppSecond = new TestCounter{43};
+    *ppText   = "\xED\xA0\x80";
+}
+
 } // namespace Diligent

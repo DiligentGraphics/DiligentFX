@@ -68,4 +68,16 @@ Bool         HasRequiredArrayStorage(const Int32* pValues, Uint32) { return pVal
 Bool         IsNullArray(const Int32* pValues, Uint32) { return pValues == nullptr; }
 const Int32* EchoOptionalValues(const Int32* pValues, Uint32) { return pValues; }
 const Int32* GetNullArray(Uint32) { return nullptr; }
+
+TEST_STATUS FillCapacityValues(Uint32 Capacity, Bool Partial, Uint32* pValues)
+{
+    // Deliberately leave the whole output or its tail untouched. The binding
+    // must initialize storage before calling an API that may not fill it.
+    if (!Partial)
+        return TEST_STATUS_FAILED;
+    for (Uint32 Index = 0; Index < std::min(Capacity, 2u); ++Index)
+        pValues[Index] = 31u + 16u * Index;
+    return TEST_STATUS_OK;
+}
+
 } // namespace Diligent

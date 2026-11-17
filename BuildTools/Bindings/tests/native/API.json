@@ -201,6 +201,13 @@
     },
     "Diligent::MARSHAL_STATUS": {
       "role": "status"
+    },
+    "Diligent::FillCapacityValues": {
+      "parameters": {
+        "pValues": {
+          "length": "Capacity"
+        }
+      }
     }
   }
 }

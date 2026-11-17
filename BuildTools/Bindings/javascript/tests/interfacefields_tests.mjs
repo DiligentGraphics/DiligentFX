@@ -18,6 +18,27 @@ export function registerTests({test, assert, api}) {
             assert.throws(() => api.SumInterfaceArray([{}], 1), TypeError);
         } finally { a.dispose(); b.dispose(); }
     });
+    test("failed descriptor snapshots release borrowed fields and interface-array elements", () => {
+        const baseline = api.GetLiveObjectCount();
+        const destroyed = api.GetDestructionCount();
+        const a = api.CreateMarshalObject({Size: 7n}, 0, false).value;
+        const b = api.CreateMarshalObject({Size: 11n}, 0, true).value;
+        try {
+            for (let i = 0; i < 3; ++i) {
+                assert.throws(() => api.GetInvalidInterfaceSnapshot({
+                    pObject: a, ppObjects: [a, null, b], Count: 3,
+                }), TypeError);
+                assert.equal(a.GetRefCount(), 1);
+                assert.equal(b.GetRefCount(), 1);
+                assert.equal(api.GetLiveObjectCount(), baseline + 2);
+                assert.equal(api.GetDestructionCount(), destroyed);
+            }
+        } finally {
+            a.dispose(); b.dispose();
+        }
+        assert.equal(api.GetLiveObjectCount(), baseline);
+        assert.equal(api.GetDestructionCount(), destroyed + 2);
+    });
     test("descriptor accessors cannot destroy already marshalled interface inputs", () => {
         const baseline = api.GetLiveObjectCount();
         const object = api.CreateMarshalObject({Size: 17n}, 0, false).value;

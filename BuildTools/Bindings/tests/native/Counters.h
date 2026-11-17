@@ -58,6 +58,8 @@ Uint64 DILIGENT_GLOBAL_FUNCTION(ReadCounterReference)(const ITestCounter REF Cou
 void DILIGENT_GLOBAL_FUNCTION(BorrowCounterOutput)(ITestCounter* pCounter, ITestCounter** ppCounter);
 #include "UndefRefMacro.h"
 Uint32 DILIGENT_GLOBAL_FUNCTION(GetLiveCounterCount)();
+Uint32 DILIGENT_GLOBAL_FUNCTION(GetDestroyedCounterCount)();
+void DILIGENT_GLOBAL_FUNCTION(FailingMultipleCounterOutputs)(ITestCounter* pCounter, ITestCounter** ppFirst, ITestCounter** ppSecond, const Char** ppText);
 void DILIGENT_GLOBAL_FUNCTION(FailingCounterOutputs)(ITestCounter** ppCounter, const Char** ppText);
 // clang-format on
 DILIGENT_END_NAMESPACE

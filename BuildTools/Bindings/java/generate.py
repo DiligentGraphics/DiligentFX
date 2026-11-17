@@ -199,9 +199,9 @@ class Generator(BindingAPI):
             original = unalias(value["type"])
             if original["kind"] == "pointer":
                 return [f'Require(Env, {expr} != nullptr || {nullable}, "Required descriptor is null");',
-                        f"Input{short} {var}Storage;", f"if ({expr}) Read{short}(Env, {expr}, {var}Storage);",
-                        f"const {t['name']}* {var} = {expr} ? &{var}Storage.Value : nullptr;"], var
-            return [f"Input{short} {var}Storage;", f"Read{short}(Env, {expr}, {var}Storage);"], var + "Storage.Value"
+                        f"ValueStorage<Input{short}> {var}Storage;", f"if ({expr}) Read{short}(Env, {expr}, {var}Storage.Get());",
+                        f"const {t['name']}* {var} = {expr} ? &{var}Storage.Get().Value : nullptr;"], var
+            return [f"ValueStorage<Input{short}> {var}Storage;", f"Read{short}(Env, {expr}, {var}Storage.Get());"], var + "Storage.Get().Value"
         if kind == "interface":
             lines = [f"Owned<{t['name']}> {var};", f'ReadInterface(Env, {expr}, {var}, "{self.state_signature}", {nullable});']
             return lines, ("*" if unalias(value["type"])["kind"] == "reference" else "") + var + ".Ptr"
@@ -398,7 +398,7 @@ static inline void Write{short}Fields(JNIEnv* Env, jobject Object, const {name}&
         # Native defaults may be incomplete until the caller fills in required
         # fields. Ordinary inputs and returned snapshots remain strict.
         default = self.native_method(SCALARS["void"], [(short, "jobject", "Object")],
-                                     [f"Write{short}Fields(Env, Object, {name}{{}}, false);"])
+                                     [f"ValueStorage<{name}> Defaults;", f"Write{short}Fields(Env, Object, Defaults.Get(), false);"])
         self.java.append(f'''    public static final class {short} {{
 {self.indent([f"public {self.info(f)[0]} {f['name']};" for f in fields], 8)}
         public {short}() {{ {default}(this); }}
@@ -466,6 +466,9 @@ static inline void Write{short}Fields(JNIEnv* Env, jobject Object, const {name}&
                     lines += [f"const jsize {var}Count = ArrayCount(Env, {length(p)});",
                               f"std::unique_ptr<{mutable_type(t)}[]> {var}(new {mutable_type(t)}[static_cast<size_t>({var}Count)]{{}});"]
                     expr = var + ".get()"
+                elif kind == "record":
+                    lines += [f"ValueStorage<{mutable_type(original['target'])}> {var};"]
+                    expr = var + ".Get()"
                 else:
                     target = original["target"]
                     lines += [f"{mutable_type(target)} {var}{{}};"]

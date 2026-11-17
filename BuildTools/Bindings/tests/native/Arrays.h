@@ -42,6 +42,7 @@ Bool DILIGENT_GLOBAL_FUNCTION(HasRequiredArrayStorage)(const Int32* pValues, Uin
 Bool DILIGENT_GLOBAL_FUNCTION(IsNullArray)(const Int32* pValues, Uint32 Count);
 const Int32* DILIGENT_GLOBAL_FUNCTION(EchoOptionalValues)(const Int32* pValues, Uint32 Count);
 const Int32* DILIGENT_GLOBAL_FUNCTION(GetNullArray)(Uint32 Count);
+TEST_STATUS DILIGENT_GLOBAL_FUNCTION(FillCapacityValues)(Uint32 Capacity, Bool Partial, Uint32* pValues);
 #include "DefineRefMacro.h"
 TEST_STATUS DILIGENT_GLOBAL_FUNCTION(FillValues)(Uint32 Capacity, Uint16* pValues, Uint32 REF Written);
 void DILIGENT_GLOBAL_FUNCTION(InvalidWrittenCount)(Uint32 Capacity, Uint16* pValues, Uint32 REF Written);

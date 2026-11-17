@@ -25,7 +25,8 @@
  */
 
 #pragma once
-#include "BasicTypes.h"
+#include "Counters.h"
 DILIGENT_BEGIN_NAMESPACE(Diligent)
 void DILIGENT_GLOBAL_FUNCTION(ThrowNative)();
+void DILIGENT_GLOBAL_FUNCTION(ThrowCounterOutputs)(ITestCounter* pCounter, Bool AllocationFailure, ITestCounter** ppFirst, ITestCounter** ppSecond);
 DILIGENT_END_NAMESPACE

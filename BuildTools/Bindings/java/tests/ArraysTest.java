@@ -56,6 +56,21 @@ public final class ArraysTest {
             throwsType(IllegalArgumentException.class, () -> SumValues(new int[0], 0x80000000L));
             throwsType(IllegalArgumentException.class, () -> SumBytes(new short[]{256}, 1));
         });
+        run("Arrays.CapacityOnlyOutputsInitializeUnwrittenElements", () -> {
+            for (int capacity : new int[]{0, 1, 5, 257}) {
+                for (int iteration = 0; iteration < 3; ++iteration) {
+                    FillCapacityValuesResult partial = FillCapacityValues(capacity, true);
+                    equal(TEST_STATUS.TEST_STATUS_OK, partial.returnValue);
+                    equal(capacity, partial.pValues.length);
+                    for (int i = 0; i < capacity; ++i)
+                        equal(i < 2 ? 31L + 16L * i : 0L, partial.pValues[i]);
+                    FillCapacityValuesResult failed = FillCapacityValues(capacity, false);
+                    equal(TEST_STATUS.TEST_STATUS_FAILED, failed.returnValue);
+                    equal(capacity, failed.pValues.length);
+                    for (long value : failed.pValues) equal(0L, value);
+                }
+            }
+        });
         run("Arrays.CallerFilledOutputs", () -> {
             FillValuesResult values = FillValues(5);
             equal(TEST_STATUS.TEST_STATUS_OK, values.returnValue);

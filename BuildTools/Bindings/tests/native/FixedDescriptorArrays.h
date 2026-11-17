@@ -96,6 +96,7 @@ typedef struct TestLargeArrayPacket TestLargeArrayPacket;
 #include "DefineRefMacro.h"
 Bool DILIGENT_GLOBAL_FUNCTION(CheckLargeArrayPacket)(const TestLargeArrayPacket REF Desc);
 const TestLargeArrayPacket REF DILIGENT_GLOBAL_FUNCTION(EchoLargeArrayPacket)(const TestLargeArrayPacket REF Desc);
+void DILIGENT_GLOBAL_FUNCTION(CopyLargeDescriptorArray)(const TestLargeDescriptorArray REF Desc, TestLargeDescriptorArray REF Result);
 Bool DILIGENT_GLOBAL_FUNCTION(CheckLargeDescriptorArray)(const TestLargeDescriptorArray REF Desc);
 const TestLargeDescriptorArray REF DILIGENT_GLOBAL_FUNCTION(EchoLargeDescriptorArray)(const TestLargeDescriptorArray REF Desc);
 Bool DILIGENT_GLOBAL_FUNCTION(CheckLargeFixedInput)(const TestLargeFixedArray REF Desc);

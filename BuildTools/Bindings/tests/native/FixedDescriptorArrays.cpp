@@ -117,4 +117,10 @@ const TestLargeArrayPacket& EchoLargeArrayPacket(const TestLargeArrayPacket& Des
 }
 
 Uint32 GetFixedDescriptorCallCount() { return FixedCallCount; }
+
+void CopyLargeDescriptorArray(const TestLargeDescriptorArray& Desc, TestLargeDescriptorArray& Result)
+{
+    Result = Desc;
+}
+
 } // namespace Diligent

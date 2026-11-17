@@ -58,6 +58,21 @@ public final class LargeFixedArraysTest {
             source.Pixels[source.Pixels.length - 1].Value = 0;
             check(CheckLargeDescriptorArray(copy));
         });
+        run("LargeFixedArrays.CombinedInputAndOutput", () -> {
+            TestLargeDescriptorArray source = new TestLargeDescriptorArray();
+            for (int i = 0; i < source.Pixels.length; ++i) source.Pixels[i].Value = i * 37L + 11;
+            // Both native values coexist during this call. Echo-by-reference
+            // does not exercise the additional output descriptor allocation.
+            TestLargeDescriptorArray copy = CopyLargeDescriptorArray(source).Result;
+            check(CheckLargeDescriptorArray(copy));
+            for (int i = 0; i < source.Pixels.length; ++i) {
+                equal(source.Pixels[i].Value, copy.Pixels[i].Value);
+                check(source.Pixels[i] != copy.Pixels[i]);
+            }
+            source.Pixels[0].Value = 0;
+            source.Pixels[source.Pixels.length - 1].Value = 0;
+            check(CheckLargeDescriptorArray(copy));
+        });
         run("LargeFixedArrays.DescriptorValidationBeforeNativeCall", () -> {
             TestLargeDescriptorArray desc = new TestLargeDescriptorArray();
             int last = desc.Pixels.length - 1;

@@ -39,7 +39,7 @@ class GenerationTest(unittest.TestCase):
         desc["fields"][0]["default"] = "ArbitraryNativeFactory()"
         java, cpp = generate(self.model)
         self.assertNotIn("ArbitraryNativeFactory", java)
-        self.assertIn("Diligent::TestDesc{}", cpp)
+        self.assertIn("ValueStorage<Diligent::TestDesc> Defaults;", cpp)
 
     def test_fixed_arguments_share_adapter_configuration(self):
         java, cpp = generate(self.model, adapters={

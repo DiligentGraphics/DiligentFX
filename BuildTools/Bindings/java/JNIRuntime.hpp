@@ -240,6 +240,29 @@ inline jstring WriteString(JNIEnv* Env, const char* Value)
     return Result;
 }
 
+// A JNI call can have several descriptor inputs and outputs alive together.
+// Keep small values inline, but bound each large value's use of the JVM's
+// native stack, including descriptor defaults and conversion storage.
+template <typename T, bool Large = (sizeof(T) > 4096)>
+class ValueStorage
+{
+public:
+    T& Get() { return m_Value; }
+
+private:
+    T m_Value{};
+};
+
+template <typename T>
+class ValueStorage<T, true>
+{
+public:
+    T& Get() { return *m_Value; }
+
+private:
+    std::unique_ptr<T> m_Value = std::make_unique<T>();
+};
+
 template <typename T>
 class Owned
 {

@@ -89,6 +89,12 @@ Java tests. CTest only runs the prepared tests. Each Java suite prints individua
 case results and runs with `-Xcheck:jni`. Fixtures count live native objects and
 verify inputs independently, including ordinary UTF-8 byte sequences and exact
 unsigned values; tests also check failure cleanup and use after disposal.
+Concurrent-close tests use a native gate, with unconditional release during
+cleanup. `CleanerTest` runs in its own JVM and waits for observed destruction
+with a bounded deadline; it does not assume that a single GC request is enough.
+Large-descriptor tests use the default JVM stack, including simultaneous input
+and output storage. Large native values use heap storage while small descriptors
+remain inline.
 
 Generator tests cover selection, determinism, native defaults, and rejection of
 unsupported shapes. Fixture sources and Java/Python test files are discovered by

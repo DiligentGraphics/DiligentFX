@@ -44,6 +44,7 @@ typedef struct MarshalInterfaceDesc MarshalInterfaceDesc;
 #include "DefineRefMacro.h"
 Uint64 DILIGENT_GLOBAL_FUNCTION(SumInterfaces)(const MarshalInterfaceDesc REF Desc);
 const MarshalInterfaceDesc REF DILIGENT_GLOBAL_FUNCTION(EchoInterfaces)(const MarshalInterfaceDesc REF Desc);
+const MarshalInterfaceDesc REF DILIGENT_GLOBAL_FUNCTION(GetInvalidInterfaceSnapshot)(const MarshalInterfaceDesc REF Desc);
 Uint64 DILIGENT_GLOBAL_FUNCTION(SumInterfaceArray)(IMarshalObject* const* ppObjects, Uint32 Count);
 #include "UndefRefMacro.h"
 
