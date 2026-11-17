@@ -35,7 +35,9 @@ Uint32 DestructionCount = 0;
 
 // A deliberately small native test double. Only strong-reference operations
 // are exposed by these bindings; weak-reference counters are not exercised.
-class MarshalObject final : public IMarshalMutableObject
+// The unrelated tagged interface has a distinct IObject subobject. Queries
+// must preserve the returned interface address, not the original object address.
+class MarshalObject final : public IMarshalMutableObject, public IMarshalTaggedObject
 {
 public:
     MarshalObject(Uint64 Size, bool Mutable) : m_Size{Size}, m_Mutable{Mutable}
@@ -46,11 +48,12 @@ public:
     void DILIGENT_CALL_TYPE QueryInterface(const INTERFACE_ID& IID, IObject** ppObject) override
     {
         *ppObject = nullptr;
-        if (IID == IID_Unknown || IID == IID_MarshalObject || (m_Mutable && IID == IID_MarshalMutableObject))
-        {
-            *ppObject = this;
+        if (IID == IID_MarshalTaggedObject)
+            *ppObject = static_cast<IMarshalTaggedObject*>(this);
+        else if (IID == IID_Unknown || IID == IID_MarshalObject || (m_Mutable && IID == IID_MarshalMutableObject))
+            *ppObject = static_cast<IMarshalMutableObject*>(this);
+        if (*ppObject)
             AddRef();
-        }
     }
     ReferenceCounterValueType DILIGENT_CALL_TYPE AddRef() override { return ++m_RefCount; }
     ReferenceCounterValueType DILIGENT_CALL_TYPE Release() override
@@ -67,6 +70,7 @@ public:
         static const MarshalNativeOnlyDesc Desc{41};
         return Desc;
     }
+    Uint64 DILIGENT_CALL_TYPE         GetTag() const override { return m_Size ^ 0xfedcba9876543210ull; }
     Uint32 DILIGENT_CALL_TYPE         GetRefCount() const override { return m_RefCount; }
     MARSHAL_STATUS DILIGENT_CALL_TYPE SetSize(Uint64 Size) override
     {

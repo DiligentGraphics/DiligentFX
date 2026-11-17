@@ -40,6 +40,7 @@
 #include "InheritedDescriptors.h"
 #include "InputArrays.h"
 #include "InterfaceFields.h"
+#include "InterfaceOverrides.h"
 #include "InterfaceReferences.h"
 #include "Interfaces.h"
 #include "NestedStructs.h"

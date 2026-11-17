@@ -101,3 +101,12 @@ void CheckCComputedOutputs(IMarshalComputedOutputs* pSource)
     IMarshalComputedOutputs_FillMatrices(pSource, pSource, &Matrix, False, False);
     Diligent_FillComputedValues(&Value, pSource, &Options);
 }
+
+const MarshalObjectDesc* CheckCInterfaceOverrides(IMarshalDerivedOverrides* pObject)
+{
+    Uint32 Value = 0;
+    Uint64 Size  = 0;
+    IMarshalDerivedOverrides_GetValue(pObject, &Value);
+    IMarshalDerivedOverrides_GetValues(pObject, &Value, &Size);
+    return IMarshalDerivedOverrides_GetDesc(pObject);
+}

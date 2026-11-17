@@ -57,11 +57,33 @@ typedef struct MarshalNativeOnlyDesc MarshalNativeOnlyDesc;
 
 typedef struct IMarshalObject        IMarshalObject;
 typedef struct IMarshalMutableObject IMarshalMutableObject;
+typedef struct IMarshalTaggedObject  IMarshalTaggedObject;
 
 static DILIGENT_CONSTEXPR INTERFACE_ID IID_MarshalObject =
     {0x71234567, 0x1234, 0x5678, {0x90, 0xab, 0xcd, 0xef, 0x12, 0x34, 0x56, 0x78}};
 static DILIGENT_CONSTEXPR INTERFACE_ID IID_MarshalMutableObject =
     {0x81234567, 0x1234, 0x5678, {0x90, 0xab, 0xcd, 0xef, 0x12, 0x34, 0x56, 0x78}};
+
+static DILIGENT_CONSTEXPR INTERFACE_ID IID_MarshalTaggedObject =
+    {0x91234567, 0x1234, 0x5678, {0x90, 0xab, 0xcd, 0xef, 0x12, 0x34, 0x56, 0x78}};
+
+#define DILIGENT_INTERFACE_NAME IMarshalTaggedObject
+#include "DefineInterfaceHelperMacros.h"
+#define IMarshalTaggedObjectInclusiveMethods \
+    IObjectInclusiveMethods;                 \
+    IMarshalTaggedObjectMethods MarshalTaggedObject
+
+// clang-format off
+DILIGENT_BEGIN_INTERFACE(IMarshalTaggedObject, IObject)
+{
+    VIRTUAL Uint64 METHOD(GetTag)(THIS) CONST PURE;
+};
+DILIGENT_END_INTERFACE
+#include "UndefInterfaceHelperMacros.h"
+#if DILIGENT_C_INTERFACE
+#    define IMarshalTaggedObject_GetTag(This) CALL_IFACE_METHOD(MarshalTaggedObject, GetTag, This)
+#endif
+// clang-format on
 
 #define DILIGENT_INTERFACE_NAME IMarshalObject
 #include "DefineInterfaceHelperMacros.h"

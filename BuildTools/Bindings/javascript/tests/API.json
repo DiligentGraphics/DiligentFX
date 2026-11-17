@@ -12,7 +12,13 @@
       "tests/native/TestScalars.h"
     ],
     "include": [
+      "Diligent::IMarshalBaseOverrides",
+      "Diligent::IMarshalDerivedOverrides",
+      "Diligent::CreateMarshalOverrides",
+      "Diligent::EchoOverrideDesc",
+      "Diligent::ReadOverrideBase",
       "Diligent::SumNestedCount",
+      "Diligent::IMarshalTaggedObject",
       "Diligent::BorrowObject",
       "Diligent::BorrowObjectOutput",
       "Diligent::CheckArrayBool",
@@ -167,8 +173,6 @@
         "pPair": {"length": 2}
       }
     },
-    "Diligent::IMarshalObject": {"include_methods": ["GetSize", "GetRefCount"]},
-    "Diligent::GetObjectSize": {"parameters": {"pObject": {"nullable": true}}},
     "Diligent::MarshalBufferDesc": {
       "fields": {
         "pBytes": {"length": "ByteCount"}
@@ -398,14 +402,6 @@
     "Diligent::FillMultiple": {
       "parameters": {
         "ppLabel": {"lifetime": "static"}
-      }
-    },
-    "Diligent::BorrowObject": {
-      "result": {"nullable": true}
-    },
-    "Diligent::BorrowObjectOutput": {
-      "parameters": {
-        "ppObject": {"lifetime": "object", "ownership": "borrowed"}
       }
     },
     "Diligent::MakeFailingOutputs": {

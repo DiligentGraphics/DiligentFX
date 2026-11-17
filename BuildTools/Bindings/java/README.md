@@ -18,7 +18,8 @@ Generated sources are build artifacts. `generate.py` accepts `--model`, `--modul
 - Scalar constants become Java `static final` compile-time constants. Integer,
   boolean, floating-point, and enum values use the same Java types as parameters;
   Uint64 constants preserve all bits in a signed Java `long`.
-- Descriptors with scalar, string, and nested descriptor fields. Construction
+- Descriptors with scalar, string, and nested descriptor fields, preserving
+  single inheritance and covariant interface returns. Construction
   obtains defaults from native C++ initialization, including incomplete defaults
   with null required fields. Required fields are checked when a descriptor is
   passed to native code and when native results are converted.
@@ -31,8 +32,9 @@ Generated sources are build artifacts. `generate.py` accepts `--model`, `--modul
 - Copied scalar/enum input arrays, borrowed array results, and caller-filled
   output arrays with explicit capacity and optional written count.
 - Scalar and descriptor output pointers/references, and multiple outputs.
-- Reference-counted interfaces directly based on an external native interface;
-  owned and borrowed interface outputs, and interface pointer/reference inputs.
+- Reference-counted interfaces with single inheritance, owned and borrowed
+  interface outputs, and interface pointer/reference inputs. Generated Java
+  classes preserve the native interface hierarchy.
 
 Java exposes Uint8 as `short`, Uint16 as `int`, and Uint32 as `long`, with checked
 ranges. Uint64 uses the complete bit pattern of a `long`; callers can use Java's
@@ -50,6 +52,8 @@ such a result into Java would otherwise leak its native allocation.
 
 Methods with output parameters return a generated result object. `returnValue`
 holds the native return value; the other fields retain the parameter names.
+Compatible interface overrides reuse the base method's result class and field
+names, including when the override renames native output parameters.
 Status values, including failures and pending results, are returned unchanged.
 An unwritten output starts with native value initialization. Native exceptions
 are contained at the JNI boundary and reported as Java exceptions.
@@ -62,8 +66,16 @@ for the duration of each call, including when another thread closes the wrapper.
 This protects lifetime; it does not change the native API's threading contract.
 If result conversion fails, all owned outputs are released before returning.
 
+`object.QueryInterface(IMutable.class)` uses the selected interface's native IID
+and returns a typed, independently owned wrapper, or null if unsupported. Close
+each successful query result, even when it refers to the original native object.
+Query targets must be generated interface classes with an IID; interfaces without
+an IID can still be used normally and serve as query sources. Inherited calls and
+derived-to-base arguments use native pointer conversions while retaining the
+original wrapper's ownership.
+
 This first backend does not yet cover the entire JavaScript surface. Unsupported
-shapes fail generation: callbacks, scoped byte access, interface inheritance,
+shapes fail generation: callbacks, scoped byte access, multiple interface bases,
 interface/pointer descriptor fields, pointer-based struct/interface arrays,
 read-only fixed-array fields, computed counts, inout parameters, and non-scalar
 constant exports. Native default arguments may be present, but Java callers

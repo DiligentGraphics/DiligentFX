@@ -68,9 +68,34 @@ class Generator(BindingAPI):
             self.names[short] = name
         self.records = [d for d in self.types.values() if d["kind"] == "record"]
         self.interfaces = [d for d in self.types.values() if d["kind"] == "interface"]
+        self.interface_results = {}
+        self.record_bases = {base for d in self.records for base in d.get("bases", [])}
+        if any(len(d.get("bases", [])) > 1 for d in self.records):
+            raise ModelError("Java: descriptors support only single inheritance")
+        self.interface_ancestors = {}
+        def ancestors(name, visiting):
+            if name in self.interface_ancestors:
+                return self.interface_ancestors[name]
+            if name in visiting:
+                raise ModelError(f"Java: cyclic interface inheritance: {name}")
+            d = self.types.get(name, {})
+            if d.get("kind") == "external" and d.get("policy", {}).get("ownership") == "reference_counted":
+                chain = [name]
+            elif d.get("kind") == "interface":
+                if len(d.get("bases", [])) != 1 or d.get("fields"):
+                    raise ModelError(f"Java: interfaces need one base and no data fields: {name}")
+                if d.get("policy", {}).get("ownership") != "reference_counted":
+                    raise ModelError(f"Java: interfaces must be reference counted: {name}")
+                if any(m["name"] in ("close", "QueryInterface") for m in d["methods"]):
+                    raise ModelError(f"Java: interface method conflicts with the runtime: {name}")
+                chain = [name, *ancestors(d["bases"][0], visiting | {name})]
+            else:
+                raise ModelError(f"Java: interface base must be a selected interface or reference-counted external type: {name}")
+            self.interface_ancestors[name] = chain
+            return chain
         for d in self.interfaces:
-            if len(d.get("bases", [])) != 1 or any(self.types.get(base, {}).get("kind") != "external" for base in d["bases"]):
-                raise ModelError(f"Java: interface inheritance is not implemented yet: {d['name']}")
+            ancestors(d["name"], set())
+        self.interface_casts = {name: f"CastInterface{index}" for index, name in enumerate(self.interface_ancestors)}
 
     def short(self, name):
         return identifier(name.rsplit("::", 1)[-1])
@@ -203,7 +228,7 @@ class Generator(BindingAPI):
                         f"const {t['name']}* {var} = {expr} ? &{var}Storage.Get().Value : nullptr;"], var
             return [f"ValueStorage<Input{short}> {var}Storage;", f"Read{short}(Env, {expr}, {var}Storage.Get());"], var + "Storage.Get().Value"
         if kind == "interface":
-            lines = [f"Owned<{t['name']}> {var};", f'ReadInterface(Env, {expr}, {var}, "{self.state_signature}", {nullable});']
+            lines = [f"Owned<{t['name']}> {var};", f'ReadInterface(Env, {expr}, {var}, "{self.state_signature}", {nullable}, {self.interface_casts[t["name"]]});']
             return lines, ("*" if unalias(value["type"])["kind"] == "reference" else "") + var + ".Ptr"
         if count is None:
             raise ModelError("Java: array requires an explicit count")
@@ -399,12 +424,49 @@ static inline void Write{short}Fields(JNIEnv* Env, jobject Object, const {name}&
         # fields. Ordinary inputs and returned snapshots remain strict.
         default = self.native_method(SCALARS["void"], [(short, "jobject", "Object")],
                                      [f"ValueStorage<{name}> Defaults;", f"Write{short}Fields(Env, Object, Defaults.Get(), false);"])
-        self.java.append(f'''    public static final class {short} {{
-{self.indent([f"public {self.info(f)[0]} {f['name']};" for f in fields], 8)}
-        public {short}() {{ {default}(this); }}
-        private {short}(boolean unused) {{}}
+        bases = d.get("bases", [])
+        parent = " extends " + self.short(bases[0]) if bases else ""
+        final = "" if name in self.record_bases else "final "
+        # Initialize inherited fields from this descriptor's native defaults once.
+        # Snapshot construction also skips all base default-initialization calls.
+        base_init = "super(false); " if bases else ""
+        self.java.append(f'''    public static {final}class {short}{parent} {{
+{self.indent([f"public {self.info(f)[0]} {f['name']};" for f in d["fields"]], 8)}
+        public {short}() {{ {base_init}{default}(this); }}
+        private {short}(boolean unused) {{ {base_init}}}
     }}
 ''')
+
+    def emit_result_class(self, fn, owner, inputs, returns):
+        name = self.short(fn["name"])
+        qualified = owner + "::" + name if owner else fn["name"]
+        signature = (name, tuple(self.info(p)[0] for p in fn["parameters"] if p in inputs))
+        types = [self.info(p) for p, _, _ in returns]
+        fields = [identifier(p["name"]) for p, _, _ in returns]
+        if len(set(fields)) != len(fields):
+            raise ModelError(f"Java: result field name collision: {qualified}")
+        inherited = None
+        if owner:
+            for base in self.interface_ancestors[owner][1:]:
+                inherited = self.interface_results.get((base, signature))
+                if inherited:
+                    break
+        if inherited:
+            result_name, fields, base_types = inherited
+            if types != base_types:
+                raise ModelError(f"Java: incompatible output result in override: {qualified}")
+            # Parameter renaming does not change the inherited Java result API.
+            # Each wrapper still marshals using its own native parameter policies.
+        else:
+            result_name = (self.short(owner) + "_" if owner else "") + name + "Result"
+            if result_name in self.names:
+                raise ModelError(f"Java: result name collision: {result_name}")
+            self.names[result_name] = qualified
+            members = [f"public {info[0]} {field};" for field, info in zip(fields, types)]
+            self.java.append(f"    public static final class {result_name} {{\n{self.indent(members, 8)}\n        private {result_name}() {{}}\n    }}\n")
+        if owner:
+            self.interface_results[(owner, signature)] = result_name, fields, types
+        return (result_name, "jobject", "L" + self.path + "$" + result_name + ";", "Object"), fields
 
     def emit_function(self, fn, owner=None):
         name = self.short(fn["name"])
@@ -423,7 +485,7 @@ static inline void Write{short}Fields(JNIEnv* Env, jobject Object, const {name}&
         if owner:
             short = self.short(owner)
             parameters.append((short, "jobject", "Self"))
-            lines += [f"Owned<{owner}> SelfNative;", f'ReadInterface(Env, Self, SelfNative, "{self.state_signature}", false);']
+            lines += [f"Owned<{owner}> SelfNative;", f'ReadInterface(Env, Self, SelfNative, "{self.state_signature}", false, {self.interface_casts[owner]});']
         # Read scalar counts first, independent of their position in the signature.
         for p in fn["parameters"]:
             if p["name"] in fixed:
@@ -512,18 +574,8 @@ static inline void Write{short}Fields(JNIEnv* Env, jobject Object, const {name}&
         lines.append("Transfers Pending{Env};")
         returns = ([] if return_expr is None else [(dict(result, name="returnValue"), return_expr, "ReturnOwner" if result_kind == "interface" else None)]) + outputs
         if outputs:
-            result_name = (self.short(owner) + "_" if owner else "") + name + "Result"
-            if result_name in self.names:
-                raise ModelError(f"Java: result name collision: {result_name}")
-            self.names[result_name] = qualified
-            fields = []
-            if len({p["name"] for p, _, _ in returns}) != len(returns):
-                raise ModelError(f"Java: result field name collision: {qualified}")
-            for p, _, _ in returns:
-                fields.append(f"public {self.info(p)[0]} {identifier(p['name'])};")
-            self.java.append(f"    public static final class {result_name} {{\n{self.indent(fields, 8)}\n        private {result_name}() {{}}\n    }}\n")
-            lines.append(f'jobject Result = NewObject(Env, "{self.path}${result_name}");')
-            result_info = (result_name, "jobject", "L" + self.path + "$" + result_name + ";", "Object")
+            result_info, result_fields = self.emit_result_class(fn, owner, inputs, returns)
+            lines.append(f'jobject Result = NewObject(Env, "{self.path}${result_info[0]}");')
         for index, (p, expr, out_owner) in enumerate(returns):
             if self.shape(p)[0] == "array" and "written" in p.get("policy", {}):
                 lines.append(f'Require(Env, {length(p, True)} <= {length(p)}, "Native written count exceeds capacity");')
@@ -531,7 +583,7 @@ static inline void Write{short}Fields(JNIEnv* Env, jobject Object, const {name}&
             lines += lines_out
             if outputs:
                 _, _, sig, suffix = self.info(p)
-                lines += [f'const jfieldID OutputField{index} = Field(Env, Result, "{p["name"]}", "{sig}");',
+                lines += [f'const jfieldID OutputField{index} = Field(Env, Result, "{result_fields[index]}", "{sig}");',
                           f"Env->Set{suffix}Field(Result, OutputField{index}, {converted});", "Check(Env);"]
             elif self.shape(p)[0] == "scalar":
                 lines.append(f"{result_info[1]} Result = {converted};")
@@ -567,9 +619,45 @@ static inline void Write{short}Fields(JNIEnv* Env, jobject Object, const {name}&
             return str(value) + "L"
         return str(value)
 
+    def emit_interface_casts(self):
+        # State.kind identifies the pointer's original interface type. Use C++
+        # conversions for inherited calls and derived arguments; never reinterpret
+        # a derived pointer directly as a base interface.
+        for target, cast in self.interface_casts.items():
+            cases = []
+            for index, d in enumerate(self.interfaces):
+                if target in self.interface_ancestors[d["name"]]:
+                    cases.append(f"case {index}: return static_cast<{target}*>(reinterpret_cast<{d['name']}*>(Pointer));")
+            self.cpp.append(f'''[[maybe_unused]] static inline {target}* {cast}(std::uintptr_t Pointer, jint Kind)
+{{
+    switch (Kind)
+    {{
+{self.indent(cases, 8)}
+        default: return nullptr;
+    }}
+}}
+''')
+
+    def emit_interface_query(self, d):
+        name = d["name"]
+        root = self.interface_ancestors[name][-1]
+        lines = [f"Owned<{root}> Source;",
+                 f'ReadInterface(Env, Self, Source, "{self.state_signature}", false, {self.interface_casts[root]});',
+                 f"Owned<{root}> Queried;",
+                 f"Source.Ptr->QueryInterface({d['policy']['iid']}, &Queried.Ptr);",
+                 f"Owned<{name}> ResultOwner;",
+                 f"ResultOwner.Ptr = static_cast<{name}*>(Queried.Ptr);",
+                 "Queried.Ptr = nullptr;",
+                 "Transfers Pending{Env};",
+                 f'jobject Result = Pending.Wrap(ResultOwner, "{self.path}${self.short(name)}", "{self.state_signature}");',
+                 "Pending.Commit();", "return Result;"]
+        native = self.native_method((self.short(name), "jobject", "", "Object"), [("NativeObject", "jobject", "Self")], lines)
+        return f"if (type == {self.short(name)}.class) return type.cast({native}(this));"
+
     def generate(self):
         includes = "\n".join('#include "' + h + '"' for h in self.headers)
         self.cpp.append('// Generated; do not edit.\n#include "JNIRuntime.hpp"\n#include <algorithm>\n#include <array>\n' + includes + '\nusing namespace DiligentBindings;\n')
+        self.emit_interface_casts()
         scalar_types = {}
         def collect(value):
             if isinstance(value, dict):
@@ -590,6 +678,8 @@ static inline void Write{short}Fields(JNIEnv* Env, jobject Object, const {name}&
             if d["name"] in visited:
                 return
             visited.add(d["name"])
+            for base in d.get("bases", []):
+                record(self.types[base])
             for f in self.record_fields(d["name"]):
                 kind, t = self.shape(f)
                 while kind == "fixed_array":
@@ -617,10 +707,28 @@ static inline void Write{short}Fields(JNIEnv* Env, jobject Object, const {name}&
                 self.java.append(f"    public static final {info[0]} {self.short(d['name'])} = {self.scalar_literal(d['type'], d['value'])};\n")
             elif d["kind"] == "function":
                 self.java.append("    " + self.emit_function(d) + "\n")
-        for index, d in enumerate(self.interfaces):
-            methods = [self.emit_function(m, d["name"]) for m in self.interface_methods(d["name"]).values()]
+        queries = []
+        bases = {d["bases"][0] for d in self.interfaces}
+        interface_indices = {d["name"]: index for index, d in enumerate(self.interfaces)}
+        emitted = set()
+        def interface(d):
+            if d["name"] in emitted:
+                return
+            base = d["bases"][0]
+            if self.types[base]["kind"] == "interface":
+                interface(self.types[base])
+            # Emit base methods first so overrides can reuse their result classes.
+            methods = [self.emit_function(m, d["name"]) for m in d["methods"]]
             short = self.short(d["name"])
-            self.java.append(f"    public static final class {short} extends NativeObject {{\n        private {short}() {{ super({index}); }}\n{self.indent(methods, 8)}\n    }}\n")
+            index = interface_indices[d["name"]]
+            parent = self.short(base) if self.types[base]["kind"] == "interface" else "NativeObject"
+            final = "" if d["name"] in bases else "final "
+            self.java.append(f"    public static {final}class {short} extends {parent} {{\n        private {short}() {{ super({index}); }}\n        private {short}(int kind) {{ super(kind); }}\n{self.indent(methods, 8)}\n    }}\n")
+            if d.get("policy", {}).get("iid"):
+                queries.append(self.emit_interface_query(d))
+            emitted.add(d["name"])
+        for d in self.interfaces:
+            interface(d)
         release = ["switch (Kind)", "{"]
         for index, d in enumerate(self.interfaces):
             release.append(f"case {index}: reinterpret_cast<{d['name']}*>(static_cast<std::uintptr_t>(Pointer))->Release(); break;")
@@ -655,6 +763,11 @@ public final class {self.module} {{
             cleanable = CLEANER.register(this, state);
         }}
         @java.lang.Override public final void close() {{ cleanable.clean(); }}
+        public final <T extends NativeObject> T QueryInterface(java.lang.Class<T> type) {{
+            java.util.Objects.requireNonNull(type, "type");
+{self.indent(queries, 12)}
+            throw new java.lang.IllegalArgumentException("QueryInterface requires a generated interface class with an IID");
+        }}
     }}
 
 {chr(10).join(self.java)}

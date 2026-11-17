@@ -66,13 +66,63 @@ class GenerationTest(unittest.TestCase):
         with self.assertRaisesRegex(backend.ModelError, "computed array lengths"):
             generate(self.model)
 
-    def test_rejects_interface_inheritance_until_pointer_adjustment_is_supported(self):
-        interface = declaration(self.model, "ITestCounter")
-        base = deepcopy(interface)
-        base["name"] = "Diligent::IBaseCounter"
-        interface["bases"] = [base["name"]]
-        self.model["declarations"].append(base)
-        with self.assertRaisesRegex(backend.ModelError, "interface inheritance"):
+    def test_rejects_multiple_interface_bases(self):
+        declaration(self.model, "ITestCounter")["bases"].append("Diligent::IMarshalObject")
+        with self.assertRaisesRegex(backend.ModelError, "interfaces need one base"):
+            generate(self.model)
+
+    def test_rejects_cyclic_interface_inheritance(self):
+        declaration(self.model, "IMarshalObject")["bases"] = ["Diligent::IMarshalMutableObject"]
+        with self.assertRaisesRegex(backend.ModelError, "cyclic interface inheritance"):
+            generate(self.model)
+
+    def test_rejects_non_reference_counted_interface_base(self):
+        declaration(self.model, "IObject")["policy"].pop("ownership")
+        with self.assertRaisesRegex(backend.ModelError, "reference-counted external type"):
+            generate(self.model)
+
+    def test_rejects_interface_data_fields(self):
+        declaration(self.model, "ITestCounter")["fields"] = declaration(self.model, "TestVector")["fields"]
+        with self.assertRaisesRegex(backend.ModelError, "no data fields"):
+            generate(self.model)
+
+    def test_rejects_interface_runtime_method_collisions(self):
+        for name in ("close", "QueryInterface"):
+            with self.subTest(name=name):
+                model = deepcopy(MODEL)
+                declaration(model, "ITestCounter")["methods"][0]["name"] = name
+                with self.assertRaisesRegex(backend.ModelError, "conflicts with the runtime"):
+                    generate(model)
+
+    def test_overrides_do_not_depend_on_declaration_order(self):
+        self.model["declarations"].reverse()
+        java, _ = generate(self.model)
+        self.assertIn("class MarshalObjectDesc extends MarshalObjectAttribs", java)
+        self.assertEqual(java.count("class IMarshalBaseOverrides_GetValueResult"), 1)
+        self.assertNotIn("IMarshalDerivedOverrides_GetValueResult", java)
+
+    def test_renamed_override_outputs_keep_base_result_fields(self):
+        method = next(m for m in declaration(self.model, "IMarshalDerivedOverrides")["methods"]
+                      if m["name"] == "GetValues")
+        for parameter in method["parameters"]:
+            parameter["name"] = "Renamed" + parameter["name"]
+        java, cpp = generate(self.model)
+        self.assertNotIn("IMarshalDerivedOverrides_GetValuesResult", java)
+        self.assertNotIn('"RenamedValue"', cpp)
+        self.assertNotIn('"RenamedSize"', cpp)
+        self.assertIn('Field(Env, Result, "Value", "J")', cpp)
+        self.assertIn('Field(Env, Result, "Size", "J")', cpp)
+
+    def test_rejects_incompatible_override_output_results(self):
+        method = next(m for m in declaration(self.model, "IMarshalDerivedOverrides")["methods"]
+                      if m["name"] == "GetValue")
+        method["parameters"][0]["type"]["target"] = deepcopy(declaration(self.model, "EchoFloat")["result"]["type"])
+        with self.assertRaisesRegex(backend.ModelError, "incompatible output result in override"):
+            generate(self.model)
+
+    def test_rejects_multiple_descriptor_bases(self):
+        declaration(self.model, "MarshalObjectDesc")["bases"].append("Diligent::TestVector")
+        with self.assertRaisesRegex(backend.ModelError, "descriptors support only single inheritance"):
             generate(self.model)
 
     def test_rejects_name_collisions(self):
@@ -136,7 +186,7 @@ class GenerationTest(unittest.TestCase):
     def test_runtime_types_are_qualified(self):
         java, _ = generate(self.model)
         for name in ("java.lang.String", "java.lang.System", "java.lang.Runnable",
-                     "java.lang.AutoCloseable", "java.lang.Override", "java.lang.ref.Cleaner"):
+                     "java.lang.AutoCloseable", "java.lang.Override", "java.lang.ref.Cleaner", "java.lang.Class"):
             self.assertTrue(name in java, name)
 
     def test_rejects_runtime_package_shadowing(self):

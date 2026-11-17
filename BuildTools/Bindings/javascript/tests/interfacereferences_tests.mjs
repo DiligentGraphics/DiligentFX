@@ -1,6 +1,27 @@
 export function registerTests({test, assert, api, constants}) {
     const pending = api.MARSHAL_STATUS.MARSHAL_STATUS_PENDING;
 
+    test("covariant descriptor and redeclared output methods preserve native overrides", t => {
+        const base = api.CreateMarshalOverrides();
+        const derived = base.QueryInterface(api.IMarshalDerivedOverrides);
+        t.after(() => { derived.dispose(); base.dispose(); });
+        derived.SetValue(113);
+        const snapshot = derived.GetDesc();
+        assert.deepEqual(snapshot, {Value: 113, Name: "derived default", Size: 0xfedcba9876543210n});
+        assert.deepEqual(base.GetDesc(), {Value: 113, Name: "derived default"});
+        assert.equal(api.ReadOverrideBase(base.GetDesc()), 113);
+        assert.deepEqual(api.EchoOverrideDesc(snapshot), snapshot);
+        assert.equal(derived.GetValue(), 113);
+        assert.equal(base.GetValue(), 113);
+        assert.deepEqual(derived.GetValues(), {status: pending, value: {Value: 113, Size: snapshot.Size}});
+        assert.deepEqual(base.GetValues(), {status: pending, value: {Value: 113, Size: snapshot.Size}});
+        derived.SetValue(127);
+        assert.equal(snapshot.Value, 113);
+        assert.equal(derived.GetDesc().Value, 127);
+        derived.dispose(); base.dispose();
+        assert.equal(snapshot.Name, "derived default");
+    });
+
     test("free functions borrow mutable and const interface references", t => {
         const baseline = api.GetLiveObjectCount();
         const source = api.CreateMarshalObject({Size: 0xfedcba9876543210n}, 0, true).value;
@@ -51,6 +72,35 @@ export function registerTests({test, assert, api, constants}) {
         source.dispose(); mutable.dispose();
         assert.throws(() => api.ReadObjectReference(source), /disposed/);
         assert.throws(() => api.WriteObjectReference(mutable, {}), /disposed/);
+    });
+
+    test("queries retain independent references across distinct native interface addresses", t => {
+        const baseline = api.GetLiveObjectCount();
+        const destroyed = api.GetDestructionCount();
+        const source = api.CreateMarshalObject({Size: 41n}, 0, true).value;
+        let tagged, mutable, base, anotherTag;
+        t.after(() => {
+            anotherTag?.dispose(); base?.dispose(); mutable?.dispose(); tagged?.dispose(); source.dispose();
+        });
+        // This interface occupies a separate IObject subobject in the shared fixture.
+        tagged = source.QueryInterface(api.IMarshalTaggedObject);
+        assert.equal(tagged.GetTag(), 41n ^ 0xfedcba9876543210n);
+        source.dispose();
+        mutable = tagged.QueryInterface(api.IMarshalMutableObject);
+        base = tagged.QueryInterface(api.IMarshalObject);
+        anotherTag = mutable.QueryInterface(api.IMarshalTaggedObject);
+        assert.equal(base.GetRefCount(), 4);
+        tagged.dispose();
+        mutable.SetSize(43n);
+        assert.equal(api.GetObjectSize(mutable), 43n);
+        assert.equal(base.GetSize(), 43n);
+        assert.equal(anotherTag.GetTag(), 43n ^ 0xfedcba9876543210n);
+        base.dispose(); mutable.dispose();
+        assert.equal(api.GetLiveObjectCount(), baseline + 1);
+        assert.equal(anotherTag.GetTag(), 43n ^ 0xfedcba9876543210n);
+        anotherTag.dispose();
+        assert.equal(api.GetLiveObjectCount(), baseline);
+        assert.equal(api.GetDestructionCount(), destroyed + 1);
     });
 
     test("interface reference arguments belong to the same Wasm module", async t => {

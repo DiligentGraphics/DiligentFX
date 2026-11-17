@@ -16,6 +16,24 @@
       "tests/native/FixedDescriptorArrays.h",
       "tests/native/Constants.h",
       "java/tests/fixtures/*.h"
+    ],
+    "include": [
+      "Diligent::IMarshalBaseOverrides",
+      "Diligent::IMarshalDerivedOverrides",
+      "Diligent::CreateMarshalOverrides",
+      "Diligent::EchoOverrideDesc",
+      "Diligent::ReadOverrideBase",
+      "Diligent::IMarshalObject",
+      "Diligent::IMarshalMutableObject",
+      "Diligent::IMarshalTaggedObject",
+      "Diligent::CreateMarshalObject",
+      "Diligent::GetObjectSize",
+      "Diligent::GetLiveObjectCount",
+      "Diligent::GetDestructionCount",
+      "Diligent::ReadObjectReference",
+      "Diligent::WriteObjectReference",
+      "Diligent::BorrowObject",
+      "Diligent::BorrowObjectOutput"
     ]
   },
   "declarations": {

@@ -296,7 +296,7 @@ private:
 };
 
 template <typename T>
-void ReadInterface(JNIEnv* Env, jobject Value, Owned<T>& Result, const char* StateSignature, bool Nullable)
+void ReadInterface(JNIEnv* Env, jobject Value, Owned<T>& Result, const char* StateSignature, bool Nullable, T* (*Cast)(std::uintptr_t, jint))
 {
     if (!Value)
     {
@@ -314,7 +314,11 @@ void ReadInterface(JNIEnv* Env, jobject Value, Owned<T>& Result, const char* Sta
         Throw(Env, "java/lang/IllegalStateException", "Native interface is closed");
         throw JavaException{};
     }
-    Result.Ptr = reinterpret_cast<T*>(static_cast<std::uintptr_t>(Pointer));
+    const jfieldID KindField = Field(Env, State.Get(), "kind", "I");
+    const jint     Kind      = Env->GetIntField(State.Get(), KindField);
+    Check(Env);
+    Result.Ptr = Cast(static_cast<std::uintptr_t>(Pointer), Kind);
+    Require(Env, Result.Ptr != nullptr, "Incompatible native interface type");
     Result.Ptr->AddRef();
 }
 

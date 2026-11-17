@@ -208,6 +208,32 @@
           "length": "Capacity"
         }
       }
+    },
+    "Diligent::IMarshalObject": {
+      "include_methods": [
+        "GetSize",
+        "GetRefCount"
+      ]
+    },
+    "Diligent::GetObjectSize": {
+      "parameters": {
+        "pObject": {
+          "nullable": true
+        }
+      }
+    },
+    "Diligent::BorrowObject": {
+      "result": {
+        "nullable": true
+      }
+    },
+    "Diligent::BorrowObjectOutput": {
+      "parameters": {
+        "ppObject": {
+          "lifetime": "object",
+          "ownership": "borrowed"
+        }
+      }
     }
   }
 }
