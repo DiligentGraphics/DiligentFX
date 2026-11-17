@@ -215,6 +215,36 @@ class GenerationTest(unittest.TestCase):
         with self.assertRaisesRegex(backend.ModelError, "recursive descriptor storage"):
             generate(self.model)
 
+    def test_rejects_retained_descriptor_pointer_fields(self):
+        field = declaration(self.model, "MarshalPointerDesc")["fields"][0]
+        field["policy"]["lifetime"] = "object"
+        with self.assertRaisesRegex(backend.ModelError, "MarshalPointerDesc::pData.*call lifetime"):
+            generate(self.model)
+
+    def test_rejects_owned_descriptor_pointer_fields(self):
+        field = declaration(self.model, "MarshalPointerDesc")["fields"][0]
+        field["policy"]["ownership"] = "owned"
+        with self.assertRaisesRegex(backend.ModelError, "release adapter"):
+            generate(self.model)
+
+    def test_rejects_mutable_descriptor_pointer_fields(self):
+        field = declaration(self.model, "MarshalPointerDesc")["fields"][0]
+        field["type"]["target"]["const"] = False
+        with self.assertRaisesRegex(backend.ModelError, "copyback adapter"):
+            generate(self.model)
+
+    def test_rejects_recursive_descriptor_pointer_fields(self):
+        field = declaration(self.model, "MarshalPointerDesc")["fields"][0]
+        field["type"]["target"] = {"kind": "named", "name": "Diligent::MarshalPointerDesc", "const": True, "volatile": False}
+        with self.assertRaisesRegex(backend.ModelError, "recursive descriptor storage"):
+            generate(self.model)
+
+    def test_pointer_pointees_precede_enclosing_descriptors(self):
+        self.model["declarations"].reverse()
+        _, cpp = generate(self.model)
+        self.assertLess(cpp.index("struct InputMarshalDesc\n"), cpp.index("struct InputMarshalPointerDesc\n"))
+        self.assertLess(cpp.index("struct InputMarshalPointerDesc\n"), cpp.index("struct InputMarshalNestedPointerDesc\n"))
+
     def test_output_only_borrowed_storage_can_have_object_lifetime(self):
         # The returned descriptor is copied while its native owner is still alive.
         self.model["declarations"] = [d for d in self.model["declarations"]

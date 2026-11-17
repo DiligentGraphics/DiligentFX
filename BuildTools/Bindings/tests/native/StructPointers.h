@@ -28,6 +28,9 @@
 
 #include "Scalars.h"
 #include "Structs.h"
+#include "InterfaceFields.h"
+#include "OutputArrays.h"
+#include "FixedDescriptorArrays.h"
 
 DILIGENT_BEGIN_NAMESPACE(Diligent)
 
@@ -38,11 +41,45 @@ struct MarshalPointerDesc
     const MarshalDesc* pData DEFAULT_INITIALIZER(nullptr);
 };
 typedef struct MarshalPointerDesc MarshalPointerDesc;
+
+// This native helper supplies a non-null default without exposing storage to a binding.
+#if DILIGENT_CPP_INTERFACE
+const MarshalDesc* GetDefaultPointerData();
+#endif
+
+struct MarshalDefaultPointerDesc
+{
+    const MarshalDesc* pData DEFAULT_INITIALIZER(GetDefaultPointerData());
+};
+typedef struct MarshalDefaultPointerDesc MarshalDefaultPointerDesc;
+
+struct MarshalRequiredPointerDesc
+{
+    const MarshalDesc* pData DEFAULT_INITIALIZER(nullptr);
+};
+typedef struct MarshalRequiredPointerDesc MarshalRequiredPointerDesc;
+
+struct MarshalNestedPointerDesc
+{
+    const MarshalPointerDesc* pNested DEFAULT_INITIALIZER(nullptr);
+    const MarshalInterfaceArrayDesc* pInterfaces DEFAULT_INITIALIZER(nullptr);
+    const MarshalArrayRoundTrip* pArrays DEFAULT_INITIALIZER(nullptr);
+    const TestLargeFixedArray* pImage DEFAULT_INITIALIZER(nullptr);
+    const Char* Label DEFAULT_INITIALIZER("pointer snapshot");
+};
+typedef struct MarshalNestedPointerDesc MarshalNestedPointerDesc;
+
 #include "DefineRefMacro.h"
 Uint64 DILIGENT_GLOBAL_FUNCTION(ReadStructPointer)(const MarshalDesc* pData);
 Uint64 DILIGENT_GLOBAL_FUNCTION(ReadRequiredPointer)(const MarshalDesc* pData);
 const MarshalDesc* DILIGENT_GLOBAL_FUNCTION(EchoStructPointer)(const MarshalDesc* pData);
 const MarshalPointerDesc REF DILIGENT_GLOBAL_FUNCTION(EchoPointerDesc)(const MarshalPointerDesc REF Desc);
+const MarshalDefaultPointerDesc REF DILIGENT_GLOBAL_FUNCTION(EchoDefaultPointerDesc)(const MarshalDefaultPointerDesc REF Desc);
+const MarshalRequiredPointerDesc REF DILIGENT_GLOBAL_FUNCTION(EchoRequiredPointerDesc)(const MarshalRequiredPointerDesc REF Desc);
+const MarshalRequiredPointerDesc REF DILIGENT_GLOBAL_FUNCTION(GetRequiredPointerSnapshot)(const MarshalPointerDesc REF Desc);
+Float64 DILIGENT_GLOBAL_FUNCTION(ReadNestedPointerValue)(const MarshalNestedPointerDesc REF Desc, Uint32 Field);
+const MarshalNestedPointerDesc REF DILIGENT_GLOBAL_FUNCTION(EchoNestedPointerDesc)(const MarshalNestedPointerDesc REF Desc, Bool InvalidLabel);
+const MarshalNestedPointerDesc* DILIGENT_GLOBAL_FUNCTION(EchoNestedPointerArray)(const MarshalNestedPointerDesc* pItems, Uint32 Count);
 #include "UndefRefMacro.h"
 
 // clang-format on

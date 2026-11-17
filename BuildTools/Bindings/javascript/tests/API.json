@@ -12,6 +12,12 @@
       "tests/native/TestScalars.h"
     ],
     "include": [
+      "Diligent::EchoDefaultPointerDesc",
+      "Diligent::EchoRequiredPointerDesc",
+      "Diligent::GetRequiredPointerSnapshot",
+      "Diligent::ReadNestedPointerValue",
+      "Diligent::EchoNestedPointerDesc",
+      "Diligent::EchoNestedPointerArray",
       "Diligent::SumInterfaceDescriptors",
       "Diligent::EchoInterfaceDescriptors",
       "Diligent::FillInterfaceDescriptors",
@@ -335,11 +341,6 @@
       "parameters": {
         "ppInvalid": {"lifetime": "static"}
       }
-    },
-    "Diligent::ReadStructPointer": {"parameters": {"pData": {"nullable": true}}},
-    "Diligent::EchoStructPointer": {
-      "parameters": {"pData": {"nullable": true}},
-      "result": {"nullable": true}
     },
     "Diligent::MarshalDerivedDesc": {
       "fields": {

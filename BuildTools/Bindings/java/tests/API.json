@@ -18,6 +18,16 @@
       "java/tests/fixtures/*.h"
     ],
     "include": [
+      "Diligent::ReadStructPointer",
+      "Diligent::ReadRequiredPointer",
+      "Diligent::EchoStructPointer",
+      "Diligent::EchoPointerDesc",
+      "Diligent::EchoDefaultPointerDesc",
+      "Diligent::EchoRequiredPointerDesc",
+      "Diligent::GetRequiredPointerSnapshot",
+      "Diligent::ReadNestedPointerValue",
+      "Diligent::EchoNestedPointerDesc",
+      "Diligent::EchoNestedPointerArray",
       "Diligent::SumInterfaceDescriptors",
       "Diligent::EchoInterfaceDescriptors",
       "Diligent::FillInterfaceDescriptors",

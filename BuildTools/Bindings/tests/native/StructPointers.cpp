@@ -46,4 +46,57 @@ const MarshalPointerDesc& EchoPointerDesc(const MarshalPointerDesc& Desc)
     return Desc;
 }
 
+const MarshalDesc* GetDefaultPointerData()
+{
+    static const MarshalDesc Data{31, -2, 2.f, 3.0, False, MARSHAL_MODE_FIRST};
+    return &Data;
+}
+
+const MarshalDefaultPointerDesc& EchoDefaultPointerDesc(const MarshalDefaultPointerDesc& Desc)
+{
+    return Desc;
+}
+
+const MarshalRequiredPointerDesc& EchoRequiredPointerDesc(const MarshalRequiredPointerDesc& Desc)
+{
+    return Desc;
+}
+
+const MarshalRequiredPointerDesc& GetRequiredPointerSnapshot(const MarshalPointerDesc& Desc)
+{
+    static MarshalRequiredPointerDesc Result;
+    Result.pData = Desc.pData;
+    return Result;
+}
+
+Float64 ReadNestedPointerValue(const MarshalNestedPointerDesc& Desc, Uint32 Field)
+{
+    switch (Field)
+    {
+        case 0: return Desc.pNested && Desc.pNested->pData ? static_cast<Float64>(Desc.pNested->pData->Size) : -1;
+        case 1: return Desc.pInterfaces ? static_cast<Float64>(SumInterfaceDescriptors(Desc.pInterfaces->pItems, Desc.pInterfaces->Count)) : -1;
+        case 2: return Desc.pArrays && Desc.pArrays->pItems && Desc.pArrays->ItemCount ? static_cast<Float64>(Desc.pArrays->pItems[0].Id) : -1;
+        case 3: return Desc.pArrays && Desc.pArrays->pValues && Desc.pArrays->ValueCount ? Desc.pArrays->pValues[0] : -1;
+        case 4: return Desc.pImage ? Desc.pImage->Pixels[sizeof(Desc.pImage->Pixels) - 1] : -1;
+        default: return -2;
+    }
+}
+
+const MarshalNestedPointerDesc& EchoNestedPointerDesc(const MarshalNestedPointerDesc& Desc, Bool InvalidLabel)
+{
+    if (!InvalidLabel)
+        return Desc;
+    // Copy all pointed-to snapshots before rejecting the trailing malformed string.
+    static MarshalNestedPointerDesc Result;
+    Result       = Desc;
+    Result.Label = "\xED\xA0\x80";
+    return Result;
+}
+
+const MarshalNestedPointerDesc* EchoNestedPointerArray(const MarshalNestedPointerDesc* pItems, Uint32 Count)
+{
+    (void)Count;
+    return pItems;
+}
+
 } // namespace Diligent

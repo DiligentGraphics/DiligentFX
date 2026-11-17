@@ -537,6 +537,47 @@
           "written": "Written"
         }
       }
+    },
+    "Diligent::ReadStructPointer": {
+      "parameters": {
+        "pData": {
+          "nullable": true
+        }
+      }
+    },
+    "Diligent::EchoStructPointer": {
+      "parameters": {
+        "pData": {
+          "nullable": true
+        }
+      },
+      "result": {
+        "nullable": true
+      }
+    },
+    "Diligent::MarshalRequiredPointerDesc": {
+      "fields": {
+        "pData": {
+          "nullable": false
+        }
+      }
+    },
+    "Diligent::MarshalNestedPointerDesc": {
+      "fields": {
+        "Label": {
+          "nullable": false
+        }
+      }
+    },
+    "Diligent::EchoNestedPointerArray": {
+      "parameters": {
+        "pItems": {
+          "length": "Count"
+        }
+      },
+      "result": {
+        "length": "Count"
+      }
     }
   }
 }

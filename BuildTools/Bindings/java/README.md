@@ -35,6 +35,11 @@ Generated sources are build artifacts. `generate.py` accepts `--model`, `--modul
   arrays use contiguous heap storage; nested strings, arrays, and interfaces stay
   alive until the call and all result conversion finish. Returned arrays are
   independent snapshots, including nested descriptor data.
+- Pointers to individual descriptors, including nullable descriptor fields. Inputs
+  keep pointees and their nested conversion storage alive through the JNI call;
+  outputs copy the entire pointed-to data into independent Java snapshots. Null
+  fields stay null and allocate no input pointee storage. Descriptor-pointer
+  fields must point to const data; mutable pointees require a copyback adapter.
 - Scalar and descriptor output pointers/references, and multiple outputs.
 - Reference-counted interfaces with single inheritance, owned and borrowed
   interface outputs, and interface pointer/reference inputs. Generated Java
@@ -85,7 +90,7 @@ original wrapper's ownership.
 
 This first backend does not yet cover the entire JavaScript surface. Unsupported
 shapes fail generation: callbacks, scoped byte access, multiple interface bases,
-descriptor-pointer fields, recursive descriptor graphs, read-only fixed-array
+mutable descriptor pointees, recursive descriptor graphs, read-only fixed-array
 fields, computed counts, inout parameters, and non-scalar
 constant exports. Native default arguments may be present, but Java callers
 currently supply every input argument.

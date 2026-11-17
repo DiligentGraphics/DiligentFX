@@ -376,7 +376,7 @@ class Generator(BindingAPI):
             if unalias(value["type"])["kind"] == "pointer":
                 lines = []
                 if not value.get("policy", {}).get("nullable", False):
-                    lines.append(f'Require(Env, {expr} != nullptr, "Native function returned a null descriptor");')
+                    lines.append(f'Require(Env, !{validate_required} || {expr} != nullptr, "Native function returned a null descriptor");')
                 lines.append(f"const LocalRef<jobject> {var}{{Env, {expr} ? Write{short}(Env, *{expr}, {validate_required}, Pending) : nullptr}};")
             else:
                 lines = [f"const LocalRef<jobject> {var}{{Env, Write{short}(Env, {expr}, {validate_required}, Pending)}};"]
@@ -435,8 +435,9 @@ class Generator(BindingAPI):
             java, jni, sig, suffix = self.info(field)
             if kind not in ("scalar", "string", "record", "fixed_array", "interface", "array") or unalias(field["type"])["kind"] == "reference":
                 raise ModelError(f"Java: unsupported descriptor field {name}::{member}")
-            if kind == "record" and unalias(field["type"])["kind"] == "pointer":
-                raise ModelError("Java: descriptor pointer fields are not implemented yet")
+            pointer_field = kind == "record" and unalias(field["type"])["kind"] == "pointer"
+            if pointer_field and not t["const"]:
+                raise ModelError("Java: descriptor pointer fields require const data; mutable pointees need a copyback adapter")
             # Read scalar counts and embedded descriptors before dependent array fields,
             # even when the count is declared after the pointer in the native struct.
             read = read_first if kind in ("scalar", "record") else read_fields
@@ -482,8 +483,19 @@ class Generator(BindingAPI):
                     child = self.short(t["name"])
                     # As with descriptor arrays, keep the child's conversion storage
                     # alive without duplicating its native value on the JVM stack.
-                    storage.append(f"std::unique_ptr<Input{child}> Storage{index} = std::make_unique<Input{child}>();")
-                    read += [f"Read{child}(Env, FieldValue{index}.Get(), *Out.Storage{index});", f"Out.Value.{member} = Out.Storage{index}->Value;"]
+                    if pointer_field:
+                        # Null optional fields allocate no pointee storage. For present
+                        # fields, retain all recursive conversion data through the call.
+                        nullable = str(field.get("policy", {}).get("nullable", False)).lower()
+                        storage.append(f"std::unique_ptr<Input{child}> Storage{index};")
+                        read += [f'Require(Env, FieldValue{index}.Get() != nullptr || {nullable}, "Required descriptor field is null");',
+                                 f"if (FieldValue{index}.Get())", "{",
+                                 f"    Out.Storage{index} = std::make_unique<Input{child}>();",
+                                 f"    Read{child}(Env, FieldValue{index}.Get(), *Out.Storage{index});", "}",
+                                 f"Out.Value.{member} = Out.Storage{index} ? &Out.Storage{index}->Value : nullptr;"]
+                    else:
+                        storage.append(f"std::unique_ptr<Input{child}> Storage{index} = std::make_unique<Input{child}>();")
+                        read += [f"Read{child}(Env, FieldValue{index}.Get(), *Out.Storage{index});", f"Out.Value.{member} = Out.Storage{index}->Value;"]
             lines, expr = self.write(field, "Value." + member, "FieldValue" + str(index), count=write_count if kind == "array" else None, validate_required="ValidateRequiredFields")
             write += [f'const jfieldID Field{index} = Field(Env, Object, "{member}", "{sig}");'] + lines
             write += [f"Env->Set{suffix}Field(Object, Field{index}, {expr});", "Check(Env);"]
