@@ -510,6 +510,18 @@
             "lifetime": "object",
             "length": "Count"
           }
+        },
+        "GetAllValues": {
+          "result": {
+            "lifetime": "object",
+            "length_method": "GetValueCount"
+          }
+        },
+        "GetAllItems": {
+          "result": {
+            "lifetime": "object",
+            "length_method": "GetItemCount"
+          }
         }
       }
     },
@@ -577,6 +589,36 @@
       },
       "result": {
         "length": "Count"
+      }
+    },
+    "Diligent::IMarshalComputedOutputs": {
+      "methods": {
+        "GetDesc": {
+          "result": {
+            "lifetime": "object"
+          }
+        },
+        "FillMatrices": {
+          "parameters": {
+            "pMatrices": {
+              "length_from": {
+                "parameter": "pSource",
+                "method": "GetDesc",
+                "field": "Count"
+              }
+            }
+          }
+        }
+      }
+    },
+    "Diligent::FillComputedValues": {
+      "parameters": {
+        "pValues": {
+          "length_from": {
+            "parameter": "Source",
+            "method": "GetValueCount"
+          }
+        }
       }
     }
   }

@@ -119,8 +119,8 @@ class Generator(BindingAPI):
         p = value.get("policy", {})
         if t.get("volatile") or p.get("binding", "automatic") != "automatic":
             raise ModelError("Java: volatile and manual declarations require an adapter")
-        if {"length_method", "length_from"} & p.keys():
-            raise ModelError("Java: computed array lengths are not implemented yet")
+        if {"length_method", "length_from"} & p.keys() and t["kind"] != "pointer":
+            raise ModelError("Java: computed array lengths require a pointer")
         if t["kind"] == "array":
             if "length" in p:
                 raise ModelError("Java: fixed arrays use their declared extent, not a length policy")
@@ -135,7 +135,7 @@ class Generator(BindingAPI):
             return "fixed_array", t
         if t["kind"] in ("pointer", "reference"):
             target = unalias(t["target"])
-            if "length" in p:
+            if {"length", "length_method", "length_from"} & p.keys():
                 info = self.scalar_info(target)
                 record = self.types.get(target.get("name"), {}).get("kind") == "record"
                 if (not info or info[0] == "void") and not self.interface_element(target) and not record:
@@ -601,16 +601,25 @@ static inline void Write{short}Fields(JNIEnv* Env, jobject Object, const {name}&
                 locals_[p["name"]] = expr
                 lines += read
 
+        computed_counts = {}
+
         def length(p, output=False):
-            spec = p.get("policy", {}).get("written" if output and "written" in p.get("policy", {}) else "length")
+            policy = p.get("policy", {})
+            if "length_from" in policy:
+                return computed_counts[p["name"]]
+            if "length_method" in policy:
+                return "ResultCount"
+            spec = policy.get("written" if output and "written" in policy else "length")
             if isinstance(spec, int):
                 return str(spec)
             if isinstance(spec, str) and spec in locals_:
                 return locals_[spec]
             raise ModelError(f"Java: array count must name a scalar parameter: {qualified}")
 
-        # All out parameters have native storage before invoking the API.
-        for p in fn["parameters"]:
+        # Retain and convert every input before querying computed output sizes.
+        # A count source may follow its output buffer in the native signature.
+        remaining = sorted(fn["parameters"], key=lambda p: p.get("policy", {}).get("direction") == "out")
+        for p in remaining:
             if p["name"] in fixed:
                 locals_[p["name"]] = fixed[p["name"]]
                 continue
@@ -628,7 +637,17 @@ static inline void Write{short}Fields(JNIEnv* Env, jobject Object, const {name}&
                     else:
                         expr = var + ".Ptr"
                 elif kind == "array":
-                    lines += [f"const jsize {var}Count = ArrayCount(Env, {length(p)});",
+                    query = p.get("policy", {}).get("length_from")
+                    if query:
+                        _, source, member = self.resolve_output_length(query, fn["parameters"], qualified + "::" + p["name"])
+                        access = "->" if unalias(source["type"])["kind"] == "pointer" else "."
+                        count = f'({locals_[source["name"]]}){access}{member}'
+                        # Reuse this pre-call count for output conversion, even if
+                        # the native operation changes the source's descriptor.
+                        computed_counts[p["name"]] = var + "Count"
+                    else:
+                        count = length(p)
+                    lines += [f"const jsize {var}Count = ArrayCount(Env, {count});",
                               f"std::unique_ptr<{mutable_type(t)}[]> {var}(new {mutable_type(t)}[static_cast<size_t>({var}Count)]{{}});"]
                     expr = var + ".get()"
                 elif kind == "record":
@@ -674,6 +693,14 @@ static inline void Write{short}Fields(JNIEnv* Env, jobject Object, const {name}&
         for p, expr, out_owner in outputs:
             if out_owner and p.get("policy", {}).get("ownership") == "borrowed":
                 lines += [f"{out_owner}.Ptr = {expr};", f"if ({expr}) {expr}->AddRef();"]
+        count_method = result.get("policy", {}).get("length_method")
+        if count_method is not None:
+            if result_kind != "array":
+                raise ModelError(f"Java: length_method requires an array result: {qualified}")
+            method = self.result_length_method(owner, count_method, qualified)
+            # The owner stays retained until both its pointer and count have been
+            # queried and the borrowed data has been copied to Java.
+            lines.append(f'const jsize ResultCount = ArrayCount(Env, SelfNative.Ptr->{method["name"]}());')
         lines.append("Transfers Pending{Env};")
         returns = ([] if return_expr is None else [(dict(result, name="returnValue"), return_expr, "ReturnOwner" if result_kind == "interface" else None)]) + outputs
         if outputs:

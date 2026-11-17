@@ -12,6 +12,8 @@
       "tests/native/TestScalars.h"
     ],
     "include": [
+      "Diligent::GetComputedOutputQueryCount",
+      "Diligent::GetComputedOutputCallCount",
       "Diligent::EchoDefaultPointerDesc",
       "Diligent::EchoRequiredPointerDesc",
       "Diligent::GetRequiredPointerSnapshot",
@@ -305,13 +307,7 @@
     },
     "Diligent::IMarshalArraySnapshots": {
       "methods": {
-        "GetDescAfterGrowingMemory": {"result": {"lifetime": "object"}},
-        "GetAllValues": {
-          "result": {"lifetime": "object", "length_method": "GetValueCount"}
-        },
-        "GetAllItems": {
-          "result": {"lifetime": "object", "length_method": "GetItemCount"}
-        }
+        "GetDescAfterGrowingMemory": {"result": {"lifetime": "object"}}
       }
     },
     "Diligent::MarshalFixedChild": {
@@ -348,25 +344,6 @@
       }
     },
     "Diligent::DefaultArrayCount": {"result": {"lifetime": "static", "length": "Count"}},
-    "Diligent::IMarshalComputedOutputs": {
-      "methods": {
-        "GetDesc": {"result": {"lifetime": "object"}},
-        "FillMatrices": {
-          "parameters": {
-            "pMatrices": {
-              "length_from": {"parameter": "pSource", "method": "GetDesc", "field": "Count"}
-            }
-          }
-        }
-      }
-    },
-    "Diligent::FillComputedValues": {
-      "parameters": {
-        "pValues": {
-          "length_from": {"parameter": "Source", "method": "GetValueCount"}
-        }
-      }
-    },
     "Diligent::MarshalExportNames": {
       "fields": {
         "Name": {"nullable": false}

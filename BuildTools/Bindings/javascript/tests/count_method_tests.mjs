@@ -1,5 +1,12 @@
 export function registerTests({test, assert, api, wasm}) {
-    test("array results obtain counts from the native owner and survive memory growth", () => {
+    test("array results obtain counts from the native owner and survive memory growth", t => {
+        const key = "_binding_Diligent_IMarshalArraySnapshots_GetAllValues_Length";
+        const query = wasm[key];
+        wasm[key] = pointer => {
+            assert.equal(api.GrowTestHeap(), true);
+            return query(pointer);
+        };
+        t.after(() => { wasm[key] = query; });
         const object = api.CreateMarshalArraySnapshots().value;
         try {
             const before = wasm.HEAPU8.byteLength;

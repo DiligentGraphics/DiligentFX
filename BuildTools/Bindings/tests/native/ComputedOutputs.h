@@ -61,7 +61,8 @@ DILIGENT_BEGIN_INTERFACE(IMarshalComputedOutputs, IObject)
     VIRTUAL void METHOD(SetCount)(THIS_ Uint64 Count) PURE;
     VIRTUAL MARSHAL_STATUS METHOD(FillMatrices)(THIS_
         IMarshalComputedOutputs* pSource, MarshalComputedMatrix* pMatrices,
-        Bool Fail DEFAULT_VALUE(False), Bool Grow DEFAULT_VALUE(False)) PURE;
+        Bool Fail DEFAULT_VALUE(False), Bool Grow DEFAULT_VALUE(False),
+        Bool ResetCount DEFAULT_VALUE(False)) PURE;
 };
 DILIGENT_END_INTERFACE
 #include "UndefInterfaceHelperMacros.h"
@@ -77,6 +78,8 @@ DILIGENT_END_INTERFACE
 MARSHAL_STATUS DILIGENT_GLOBAL_FUNCTION(CreateComputedOutputs)(Uint64 Count, IMarshalComputedOutputs** ppObject);
 void DILIGENT_GLOBAL_FUNCTION(FillComputedValues)(Uint32* pValues, const IMarshalComputedOutputs REF Source, const MarshalDesc REF Options);
 Uint32 DILIGENT_GLOBAL_FUNCTION(GetLiveComputedOutputs)(void);
+Uint32 DILIGENT_GLOBAL_FUNCTION(GetComputedOutputQueryCount)(void);
+Uint32 DILIGENT_GLOBAL_FUNCTION(GetComputedOutputCallCount)(void);
 #include "UndefRefMacro.h"
 // clang-format on
 

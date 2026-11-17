@@ -170,31 +170,9 @@ class Generator(BindingAPI):
         return span
 
     def output_length_query(self, query, siblings, context):
-        source = next((p for p in siblings if p["name"] == query["parameter"]), None)
-        source_type = unalias(source["type"]) if source else {}
-        inner = unalias(source_type["target"]) if source_type.get("kind") in ("pointer", "reference") else {}
-        declaration = self.types.get(inner.get("name"), {})
-        if (declaration.get("kind") != "interface" or inner.get("volatile") or
-                source.get("policy", {}) != {"direction": "in", "nullable": False, "ownership": "borrowed", "lifetime": "call"}):
-            raise ModelError(f"{context}: length_from requires a non-null borrowed interface input")
-        method = self.interface_methods(declaration["name"]).get(query["method"])
-        if not method or method["parameters"] or not method.get("const"):
-            raise ModelError(f"{context}: length_from requires a const no-argument method")
-        count_type = method["result"]["type"]
-        expression = f'reinterpret_cast<{cpp_type(source_type["target"])}*>(source)->{method["name"]}()'
-        if "field" in query:
-            result = unalias(count_type)
-            record = unalias(result["target"]) if result["kind"] == "reference" else {}
-            if (not record.get("const") or record.get("volatile") or
-                    self.types.get(record.get("name"), {}).get("kind") != "record"):
-                raise ModelError(f"{context}: length_from field requires a const-reference descriptor result")
-            field = next((f for f in self.record_fields(record["name"]) if f["name"] == query["field"]), None)
-            if not field:
-                raise ModelError(f"{context}: unknown length_from field")
-            count_type = field["type"]
-            expression += '.' + field["name"]
-        if self.scalar(count_type) not in ("u32", "u64"):
-            raise ModelError(f"{context}: length_from must produce an unsigned 32-bit or 64-bit count")
+        count_type, source, member = self.resolve_output_length(query, siblings, context)
+        source_type = unalias(source["type"])
+        expression = f'reinterpret_cast<{cpp_type(source_type["target"])}*>(source)->{member}'
         export = self.export(symbol(context) + '_Length', 'uint64_t', ['uintptr_t source'],
                              f'return {expression};')
         return count_type, {"export": export, "parameter": source["name"]}
@@ -423,10 +401,7 @@ class Generator(BindingAPI):
         method_name = result.get("policy", {}).get("length_method")
         if method_name is None:
             return self.span(result, d["parameters"], context, output=True)
-        method = self.interface_methods(owner).get(method_name) if owner else None
-        if (not method or method["parameters"] or
-                self.scalar(method["result"]["type"]) not in ("u32", "u64")):
-            raise ModelError(f"{context}: length_method must name an unsigned no-argument method on this interface")
+        method = self.result_length_method(owner, method_name, context)
         proxy = deepcopy(result)
         proxy["policy"].pop("length_method")
         proxy["policy"]["length"] = method_name

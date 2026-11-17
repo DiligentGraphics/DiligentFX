@@ -33,7 +33,9 @@ namespace Diligent
 namespace
 {
 
-Uint32 LiveComputedOutputs = 0;
+Uint32 LiveComputedOutputs      = 0;
+Uint32 ComputedOutputQueryCount = 0;
+Uint32 ComputedOutputCallCount  = 0;
 
 class ComputedOutputs final : public IMarshalComputedOutputs
 {
@@ -62,12 +64,21 @@ public:
         return Count;
     }
     IReferenceCounters* DILIGENT_CALL_TYPE        GetReferenceCounters() const override { return nullptr; }
-    const MarshalComputedDesc& DILIGENT_CALL_TYPE GetDesc() const override { return m_Desc; }
-    Uint64 DILIGENT_CALL_TYPE                     GetValueCount() const override { return m_Desc.Count; }
-    void DILIGENT_CALL_TYPE                       SetCount(Uint64 Count) override { m_Desc.Count = Count; }
-
-    MARSHAL_STATUS DILIGENT_CALL_TYPE FillMatrices(IMarshalComputedOutputs* pSource, MarshalComputedMatrix* pMatrices, Bool Fail, Bool Grow) override
+    const MarshalComputedDesc& DILIGENT_CALL_TYPE GetDesc() const override
     {
+        ++ComputedOutputQueryCount;
+        return m_Desc;
+    }
+    Uint64 DILIGENT_CALL_TYPE GetValueCount() const override
+    {
+        ++ComputedOutputQueryCount;
+        return m_Desc.Count;
+    }
+    void DILIGENT_CALL_TYPE SetCount(Uint64 Count) override { m_Desc.Count = Count; }
+
+    MARSHAL_STATUS DILIGENT_CALL_TYPE FillMatrices(IMarshalComputedOutputs* pSource, MarshalComputedMatrix* pMatrices, Bool Fail, Bool Grow, Bool ResetCount) override
+    {
+        ++ComputedOutputCallCount;
         if (Fail)
             return MARSHAL_STATUS_FAILED;
         if (Grow)
@@ -80,6 +91,10 @@ public:
                 pMatrices[i].Data[Component] = static_cast<float>(100 * i + Component + 1);
             }
         }
+        // Output conversion must use the capacity queried before this call,
+        // even when the operation changes the source's subsequent count.
+        if (ResetCount)
+            pSource->SetCount(0);
         return MARSHAL_STATUS_PENDING;
     }
 
@@ -100,12 +115,16 @@ MARSHAL_STATUS CreateComputedOutputs(Uint64 Count, IMarshalComputedOutputs** ppO
 
 void FillComputedValues(Uint32* pValues, const IMarshalComputedOutputs& Source, const MarshalDesc& Options)
 {
-    for (Uint64 i = 0; i < Source.GetValueCount(); ++i)
+    ++ComputedOutputCallCount;
+    const Uint64 Count = Source.GetValueCount();
+    for (Uint64 i = 0; i < Count; ++i)
     {
         pValues[i] = static_cast<Uint32>(Options.Size + i);
     }
 }
 
 Uint32 GetLiveComputedOutputs() { return LiveComputedOutputs; }
+Uint32 GetComputedOutputQueryCount() { return ComputedOutputQueryCount; }
+Uint32 GetComputedOutputCallCount() { return ComputedOutputCallCount; }
 
 } // namespace Diligent

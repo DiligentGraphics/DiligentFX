@@ -59,6 +59,20 @@ transfers require adapters and currently fail generation. Owned raw pointer
 results (including descriptor pointers) also require a release adapter; copying
 such a result into Java would otherwise leak its native allocation.
 
+Array results with `length_method` obtain their element count from a no-argument
+method on the same interface or its base. Output parameters with `length_from`
+obtain their count from a retained interface argument's const no-argument method,
+optionally through an unsigned field of its returned descriptor. Both forms use
+unsigned 32-bit or 64-bit counts, checked against Java's array-length limit before
+allocation or copying. No extra Java count argument is needed.
+
+Count queries, native calls, and result copying happen within one JNI call. All
+inputs are converted before querying an output capacity; that capacity is reused
+for result conversion even if the operation changes the source's subsequent
+count. Borrowed results query their count after the native call while the owner
+is retained. This protects lifetime, but callers must still obey the native API's
+synchronization contract so borrowed pointers and counts describe stable data.
+
 Methods with output parameters return a generated result object. `returnValue`
 holds the native return value; the other fields retain the parameter names.
 Compatible interface overrides reuse the base method's result class and field
@@ -91,7 +105,7 @@ original wrapper's ownership.
 This first backend does not yet cover the entire JavaScript surface. Unsupported
 shapes fail generation: callbacks, scoped byte access, multiple interface bases,
 mutable descriptor pointees, recursive descriptor graphs, read-only fixed-array
-fields, computed counts, inout parameters, and non-scalar
+fields, adapter-computed field sizes, inout parameters, and non-scalar
 constant exports. Native default arguments may be present, but Java callers
 currently supply every input argument.
 Radient selection, packaging, Android integration, and rendering are later steps.

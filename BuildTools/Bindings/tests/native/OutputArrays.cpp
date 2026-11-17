@@ -104,7 +104,6 @@ public:
     }
     Uint64 DILIGENT_CALL_TYPE GetValueCount() const override
     {
-        GrowTestHeap();
         return m_ValueCount;
     }
     Uint32 DILIGENT_CALL_TYPE                        GetItemCount() const override { return static_cast<Uint32>(m_Items.size()); }

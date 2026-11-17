@@ -59,12 +59,65 @@ class GenerationTest(unittest.TestCase):
         with self.assertRaisesRegex(backend.ModelError, "inout"):
             generate(self.model)
 
-    def test_rejects_computed_array_count(self):
-        policy = declaration(self.model, "EchoValues")["result"]["policy"]
-        policy.pop("length")
-        policy["length_method"] = "GetCount"
-        with self.assertRaisesRegex(backend.ModelError, "computed array lengths"):
+    def test_computed_lengths_keep_counts_out_of_java_signatures(self):
+        java, _ = generate(self.model)
+        self.assertIn("float[] GetAllValues()", java)
+        self.assertIn("MarshalOutputArrayItem[] GetAllItems()", java)
+        self.assertIn("FillMatrices(IMarshalComputedOutputs pSource, boolean Fail, boolean Grow, boolean ResetCount)", java)
+        self.assertIn("FillComputedValues(IMarshalComputedOutputs Source, MarshalDesc Options)", java)
+
+    def test_rejects_invalid_length_methods(self):
+        for name in ("Missing", "SetValueCount", "Update", "GetDesc"):
+            with self.subTest(name=name):
+                model = deepcopy(self.model)
+                methods = declaration(model, "IMarshalArraySnapshots")["methods"]
+                next(m for m in methods if m["name"] == "GetAllValues")["result"]["policy"]["length_method"] = name
+                with self.assertRaises(backend.ModelError):
+                    generate(model)
+        # A free function has no receiver to provide length_method.
+        result = declaration(self.model, "EchoValues")["result"]
+        result["policy"].pop("length")
+        result["policy"]["length_method"] = "GetValueCount"
+        with self.assertRaisesRegex(backend.ModelError, "length_method"):
             generate(self.model)
+
+    def test_computed_lengths_require_pointer_storage(self):
+        for kind in ("reference", "scalar"):
+            with self.subTest(kind=kind):
+                model = deepcopy(self.model)
+                methods = declaration(model, "IMarshalArraySnapshots")["methods"]
+                result = next(m for m in methods if m["name"] == "GetAllValues")["result"]
+                if kind == "reference":
+                    result["type"]["kind"] = kind
+                else:
+                    result["type"] = result["type"]["target"]
+                with self.assertRaisesRegex(backend.ModelError, "computed array lengths require a pointer"):
+                    generate(model)
+
+    def test_rejects_invalid_length_sources(self):
+        for change in ("source", "nullable", "method", "nonconst", "field", "count_type", "descriptor_result"):
+            with self.subTest(change=change):
+                model = deepcopy(self.model)
+                methods = {m["name"]: m for m in declaration(model, "IMarshalComputedOutputs")["methods"]}
+                parameters = methods["FillMatrices"]["parameters"]
+                query = parameters[1]["policy"]["length_from"]
+                if change == "source":
+                    query["parameter"] = "missing"
+                elif change == "nullable":
+                    parameters[0]["policy"]["nullable"] = True
+                elif change == "method":
+                    query["method"] = "SetCount"
+                elif change == "nonconst":
+                    methods["GetDesc"]["const"] = False
+                elif change == "field":
+                    query["field"] = "missing"
+                elif change == "descriptor_result":
+                    methods["GetDesc"]["result"]["type"]["kind"] = "pointer"
+                else:
+                    declaration(model, "MarshalComputedDesc")["fields"][0]["type"] = {
+                        "kind": "scalar", "name": "int", "bits": 32, "const": False, "volatile": False}
+                with self.assertRaisesRegex(backend.ModelError, "length_from"):
+                    generate(model)
 
     def test_rejects_multiple_interface_bases(self):
         declaration(self.model, "ITestCounter")["bases"].append("Diligent::IMarshalObject")

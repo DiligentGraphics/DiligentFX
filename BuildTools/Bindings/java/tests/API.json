@@ -18,6 +18,8 @@
       "java/tests/fixtures/*.h"
     ],
     "include": [
+      "Diligent::GetComputedOutputQueryCount",
+      "Diligent::GetComputedOutputCallCount",
       "Diligent::ReadStructPointer",
       "Diligent::ReadRequiredPointer",
       "Diligent::EchoStructPointer",
@@ -69,7 +71,10 @@
       "Diligent::EchoArrayDescriptor",
       "Diligent::GetInvalidOutputArray",
       "Diligent::GetStaticOutputArray",
-      "Diligent::FillRecords"
+      "Diligent::FillRecords",
+      "Diligent::CreateComputedOutputs",
+      "Diligent::FillComputedValues",
+      "Diligent::GetLiveComputedOutputs"
     ]
   },
   "declarations": {
@@ -105,7 +110,12 @@
         "GetDesc",
         "GetValues",
         "GetItems",
-        "Update"
+        "Update",
+        "GetValueCount",
+        "GetItemCount",
+        "GetAllValues",
+        "GetAllItems",
+        "SetValueCount"
       ]
     }
   }

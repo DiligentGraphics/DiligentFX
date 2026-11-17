@@ -46,6 +46,14 @@ export function registerTests({test, assert, api, wasm}) {
         // The earlier result remains JS-owned after subsequent calls and growth.
         assert.equal(result.value[1].Data[15], 116);
         assert.deepEqual(counts, [2, 3]);
+        const queries = api.GetComputedOutputQueryCount();
+        const reset = receiver.FillMatrices(source, false, false, true);
+        assert.equal(reset.value.length, 3);
+        assert.equal(reset.value[2].Data[15], 216);
+        // One binding query and one native query; no post-call count query.
+        assert.equal(api.GetComputedOutputQueryCount(), queries + 2);
+        assert.equal(source.GetValueCount(), 0n);
+        assert.deepEqual(counts, [2, 3, 3]);
     });
 
     test("zero and oversized native counts avoid output allocation", t => {

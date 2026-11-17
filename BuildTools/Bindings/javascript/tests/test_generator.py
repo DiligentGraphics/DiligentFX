@@ -89,7 +89,7 @@ class GeneratorTest(unittest.TestCase):
         cpp, _, types = generator.generate()
         self.assertIn("reinterpret_cast<Diligent::IMarshalComputedOutputs*>(source)->GetDesc().Count", cpp)
         self.assertIn("reinterpret_cast<const Diligent::IMarshalComputedOutputs*>(source)->GetValueCount()", cpp)
-        self.assertIn("FillMatrices(pSource: IMarshalComputedOutputs, Fail?: boolean, Grow?: boolean): Result<Array<StructSnapshot<MarshalComputedMatrix>>>;", types)
+        self.assertIn("FillMatrices(pSource: IMarshalComputedOutputs, Fail?: boolean, Grow?: boolean, ResetCount?: boolean): Result<Array<StructSnapshot<MarshalComputedMatrix>>>;", types)
         self.assertIn("FillComputedValues(Source: IMarshalComputedOutputs, Options: MarshalDesc): Uint32Array;", types)
         buffer = generator.schema["interfaces"]["IMarshalComputedOutputs"]["methods"]["FillMatrices"]["parameters"][1]["output"]["buffer"]
         self.assertEqual(buffer["lengthQuery"]["parameter"], "pSource")

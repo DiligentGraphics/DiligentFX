@@ -98,7 +98,7 @@ void CheckCComputedOutputs(IMarshalComputedOutputs* pSource)
     MarshalComputedMatrix Matrix  = {0};
     MarshalDesc           Options = {0};
     Uint32                Value   = 0;
-    IMarshalComputedOutputs_FillMatrices(pSource, pSource, &Matrix, False, False);
+    IMarshalComputedOutputs_FillMatrices(pSource, pSource, &Matrix, False, False, False);
     Diligent_FillComputedValues(&Value, pSource, &Options);
 }
 
