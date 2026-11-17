@@ -34,8 +34,18 @@ namespace Diligent
 {
 namespace
 {
-Uint32 LiveBufferCount = 0;
-Uint32 ReleaseCount    = 0;
+Uint32 LiveBufferCount   = 0;
+Uint32 ReleaseCount      = 0;
+Uint32 ByteSpanCallCount = 0;
+
+Uint64 WriteBytePrefix(void* pBytes, Uint64 Capacity)
+{
+    static constexpr Uint8 Pattern[] = {17, 128, 254};
+    const Uint64           Written   = Capacity < sizeof(Pattern) ? Capacity : sizeof(Pattern);
+    if (Written != 0)
+        std::memcpy(pBytes, Pattern, static_cast<size_t>(Written));
+    return Written;
+}
 
 // Controlled byte storage for marshalling tests, independent of any production
 // blob implementation. Read and write acquisitions deliberately return different
@@ -71,6 +81,7 @@ public:
     }
     IReferenceCounters* DILIGENT_CALL_TYPE GetReferenceCounters() const override { return nullptr; }
     Uint64 DILIGENT_CALL_TYPE              Size() const override { return m_ReportedSize; }
+    const void* DILIGENT_CALL_TYPE         GetData() const override { return m_Data.empty() ? nullptr : m_Data.data(); }
     Uint32 DILIGENT_CALL_TYPE              RefCount() const override { return m_Refs; }
     Uint32 DILIGENT_CALL_TYPE              ReaderCount() const override { return m_Readers; }
     Bool DILIGENT_CALL_TYPE                IsWriting() const override { return m_Writing; }
@@ -141,6 +152,7 @@ MARSHAL_STATUS CreateMarshalBytes(const MarshalBufferDesc& Desc, IMarshalBytes**
 }
 Uint32 ChecksumBytes(const void* pBytes, Uint64 ByteCount, Bool Invert)
 {
+    ++ByteSpanCallCount;
     const Uint8* pData    = static_cast<const Uint8*>(pBytes);
     Uint32       Checksum = 0;
     for (Uint64 i = 0; i < ByteCount; ++i)
@@ -151,6 +163,57 @@ Bool CheckBytes(Uint32 ByteCount, const Uint8* pBytes)
 {
     return ByteCount == 3 && pBytes[0] == 17 && pBytes[1] == 128 && pBytes[2] == 254;
 }
+const void* EchoByteSpan(const void* pBytes, Uint64 ByteCount)
+{
+    ++ByteSpanCallCount;
+    (void)ByteCount;
+    return pBytes;
+}
+Bool ByteSpanHasStorage(const void* pBytes, Uint64 ByteCount)
+{
+    ++ByteSpanCallCount;
+    (void)ByteCount;
+    return pBytes != nullptr;
+}
+const MarshalBufferDesc& EchoBufferDesc(const MarshalBufferDesc& Desc)
+{
+    ++ByteSpanCallCount;
+    return Desc;
+}
+const MarshalBytePacket& EchoBytePacket(const MarshalBytePacket& Desc, Bool InvalidLabel)
+{
+    ++ByteSpanCallCount;
+    if (!InvalidLabel)
+        return Desc;
+    // Snapshot conversion fails after copying bytes and acquiring the interface.
+    static MarshalBytePacket Result;
+    Result       = Desc;
+    Result.Label = "\xED\xA0\x80";
+    return Result;
+}
+MARSHAL_STATUS FillByteSpan(void* pBytes, Uint64 Capacity, Uint64& Written, Bool InvalidWritten)
+{
+    ++ByteSpanCallCount;
+    Written = WriteBytePrefix(pBytes, Capacity);
+    if (InvalidWritten)
+        Written = Capacity + 1;
+    return MARSHAL_STATUS_PENDING;
+}
+MARSHAL_STATUS FillByteCapacity(void* pBytes, Uint64 Capacity, Bool Fail)
+{
+    ++ByteSpanCallCount;
+    if (Fail)
+        return MARSHAL_STATUS_FAILED;
+    WriteBytePrefix(pBytes, Capacity);
+    return MARSHAL_STATUS_OK;
+}
+void CopyBufferBytes(void* pBytes, const IMarshalBytes& Source)
+{
+    ++ByteSpanCallCount;
+    if (Source.Size() != 0)
+        std::memcpy(pBytes, Source.GetData(), static_cast<size_t>(Source.Size()));
+}
+Uint32 GetByteSpanCallCount() { return ByteSpanCallCount; }
 Uint32 GetLiveBufferCount() { return LiveBufferCount; }
 Uint32 GetBufferReleaseCount() { return ReleaseCount; }
 } // namespace Diligent

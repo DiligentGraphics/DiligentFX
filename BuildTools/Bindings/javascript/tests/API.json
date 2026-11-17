@@ -12,6 +12,14 @@
       "tests/native/TestScalars.h"
     ],
     "include": [
+      "Diligent::EchoByteSpan",
+      "Diligent::ByteSpanHasStorage",
+      "Diligent::EchoBufferDesc",
+      "Diligent::EchoBytePacket",
+      "Diligent::FillByteSpan",
+      "Diligent::FillByteCapacity",
+      "Diligent::CopyBufferBytes",
+      "Diligent::GetByteSpanCallCount",
       "Diligent::GetComputedOutputQueryCount",
       "Diligent::GetComputedOutputCallCount",
       "Diligent::EchoDefaultPointerDesc",
@@ -191,11 +199,6 @@
         "pPair": {"length": 2}
       }
     },
-    "Diligent::MarshalBufferDesc": {
-      "fields": {
-        "pBytes": {"length": "ByteCount"}
-      }
-    },
     "Diligent::IMarshalBytes": {
       "methods": {
         "MapRead": {
@@ -211,12 +214,6 @@
         },
         "UnmapWrite": {"binding": "manual", "reason": "Called only when the scoped byte adapter is disposed."}
       }
-    },
-    "Diligent::ChecksumBytes": {
-      "parameters": {"pBytes": {"length": "ByteCount"}}
-    },
-    "Diligent::CheckBytes": {
-      "parameters": {"pBytes": {"length": "ByteCount"}}
     },
     "Diligent::MarshalStringDesc": {
       "fields": {

@@ -620,6 +620,89 @@
           }
         }
       }
+    },
+    "Diligent::MarshalBufferDesc": {
+      "fields": {
+        "pBytes": {
+          "length": "ByteCount"
+        }
+      }
+    },
+    "Diligent::ChecksumBytes": {
+      "parameters": {
+        "pBytes": {
+          "length": "ByteCount"
+        }
+      }
+    },
+    "Diligent::CheckBytes": {
+      "parameters": {
+        "pBytes": {
+          "length": "ByteCount"
+        }
+      }
+    },
+    "Diligent::IMarshalBytes": {
+      "methods": {
+        "GetData": {
+          "result": {
+            "length_method": "Size",
+            "lifetime": "object",
+            "nullable": true
+          }
+        }
+      }
+    },
+    "Diligent::MarshalBytePacket": {
+      "fields": {
+        "Label": {
+          "nullable": false
+        }
+      }
+    },
+    "Diligent::EchoByteSpan": {
+      "parameters": {
+        "pBytes": {
+          "length": "ByteCount",
+          "nullable": true
+        }
+      },
+      "result": {
+        "length": "ByteCount",
+        "nullable": true
+      }
+    },
+    "Diligent::ByteSpanHasStorage": {
+      "parameters": {
+        "pBytes": {
+          "length": "ByteCount"
+        }
+      }
+    },
+    "Diligent::FillByteSpan": {
+      "parameters": {
+        "pBytes": {
+          "length": "Capacity",
+          "written": "Written"
+        }
+      }
+    },
+    "Diligent::FillByteCapacity": {
+      "parameters": {
+        "pBytes": {
+          "length": "Capacity"
+        }
+      }
+    },
+    "Diligent::CopyBufferBytes": {
+      "parameters": {
+        "pBytes": {
+          "length_from": {
+            "parameter": "Source",
+            "method": "Size"
+          }
+        }
+      }
     }
   }
 }

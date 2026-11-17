@@ -74,7 +74,19 @@
       "Diligent::FillRecords",
       "Diligent::CreateComputedOutputs",
       "Diligent::FillComputedValues",
-      "Diligent::GetLiveComputedOutputs"
+      "Diligent::GetLiveComputedOutputs",
+      "Diligent::EchoByteSpan",
+      "Diligent::ByteSpanHasStorage",
+      "Diligent::EchoBufferDesc",
+      "Diligent::EchoBytePacket",
+      "Diligent::FillByteSpan",
+      "Diligent::FillByteCapacity",
+      "Diligent::CopyBufferBytes",
+      "Diligent::GetByteSpanCallCount",
+      "Diligent::ChecksumBytes",
+      "Diligent::CheckBytes",
+      "Diligent::CreateMarshalBytes",
+      "Diligent::GetLiveBufferCount"
     ]
   },
   "declarations": {
@@ -116,6 +128,15 @@
         "GetAllValues",
         "GetAllItems",
         "SetValueCount"
+      ]
+    },
+    "Diligent::IMarshalBytes": {
+      "include_methods": [
+        "Size",
+        "GetData",
+        "Resize",
+        "RefCount",
+        "SetReportedSize"
       ]
     }
   }

@@ -119,6 +119,52 @@ class GenerationTest(unittest.TestCase):
                 with self.assertRaisesRegex(backend.ModelError, "length_from"):
                     generate(model)
 
+    def test_byte_spans_use_byte_arrays_without_changing_uint8_arrays(self):
+        java, _ = generate(self.model)
+        self.assertIn("ChecksumBytes(byte[] pBytes, long ByteCount, boolean Invert)", java)
+        self.assertIn("CheckBytes(long ByteCount, short[] pBytes)", java)
+        self.assertIn("public byte[] pBytes;", java)
+        self.assertIn("byte[] GetData()", java)
+
+    def test_rejects_unbounded_raw_byte_pointers(self):
+        for name in ("ChecksumBytes", "FillByteCapacity"):
+            with self.subTest(name=name):
+                model = deepcopy(self.model)
+                declaration(model, name)["parameters"][0]["policy"].pop("length")
+                with self.assertRaisesRegex(backend.ModelError, "raw byte pointers require a length"):
+                    generate(model)
+
+    def test_raw_bytes_reject_retention_and_ownership_transfer(self):
+        for target in ("parameter", "field", "result"):
+            with self.subTest(target=target):
+                model = deepcopy(self.model)
+                if target == "parameter":
+                    declaration(model, "ChecksumBytes")["parameters"][0]["policy"]["lifetime"] = "object"
+                    error = "call lifetime"
+                elif target == "field":
+                    declaration(model, "MarshalBufferDesc")["fields"][1]["policy"]["lifetime"] = "object"
+                    error = "call lifetime"
+                else:
+                    declaration(model, "EchoByteSpan")["result"]["policy"]["ownership"] = "owned"
+                    error = "release adapter"
+                with self.assertRaisesRegex(backend.ModelError, error):
+                    generate(model)
+
+    def test_raw_bytes_reject_mutable_inputs_and_volatile_storage(self):
+        for target in ("parameter", "field", "volatile"):
+            with self.subTest(target=target):
+                model = deepcopy(self.model)
+                value = (declaration(model, "MarshalBufferDesc")["fields"][1] if target == "field"
+                         else declaration(model, "ChecksumBytes")["parameters"][0])
+                if target == "volatile":
+                    value["type"]["target"]["volatile"] = True
+                    error = "non-volatile"
+                else:
+                    value["type"]["target"]["const"] = False
+                    error = "copyback adapter"
+                with self.assertRaisesRegex(backend.ModelError, error):
+                    generate(model)
+
     def test_rejects_multiple_interface_bases(self):
         declaration(self.model, "ITestCounter")["bases"].append("Diligent::IMarshalObject")
         with self.assertRaisesRegex(backend.ModelError, "interfaces need one base"):

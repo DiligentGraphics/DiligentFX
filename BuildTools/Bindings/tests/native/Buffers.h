@@ -38,6 +38,15 @@ struct MarshalBufferDesc
 };
 typedef struct MarshalBufferDesc MarshalBufferDesc;
 typedef struct IMarshalBytes     IMarshalBytes;
+typedef struct IMarshalObject    IMarshalObject;
+
+struct MarshalBytePacket
+{
+    IMarshalObject* pObject DEFAULT_INITIALIZER(nullptr);
+    MarshalBufferDesc       Buffer;
+    const Char* Label       DEFAULT_INITIALIZER("byte packet");
+};
+typedef struct MarshalBytePacket MarshalBytePacket;
 
 static DILIGENT_CONSTEXPR INTERFACE_ID IID_MarshalBytes =
     {0x91234567, 0x1234, 0x5678, {0x90, 0xab, 0xcd, 0xef, 0x12, 0x34, 0x56, 0x78}};
@@ -52,6 +61,7 @@ static DILIGENT_CONSTEXPR INTERFACE_ID IID_MarshalBytes =
 DILIGENT_BEGIN_INTERFACE(IMarshalBytes, IObject)
 {
     VIRTUAL Uint64 METHOD(Size)(THIS) CONST PURE;
+    VIRTUAL const void* METHOD(GetData)(THIS) CONST PURE;
     VIRTUAL MARSHAL_STATUS METHOD(MapRead)(THIS_ const void** ppData) PURE;
     VIRTUAL MARSHAL_STATUS METHOD(UnmapRead)(THIS) PURE;
     VIRTUAL MARSHAL_STATUS METHOD(MapWrite)(THIS_ void** ppData) PURE;
@@ -67,6 +77,7 @@ DILIGENT_END_INTERFACE
 #include "UndefInterfaceHelperMacros.h"
 #if DILIGENT_C_INTERFACE
 #    define IMarshalBytes_Size(This) CALL_IFACE_METHOD(MarshalBytes, Size, This)
+#    define IMarshalBytes_GetData(This) CALL_IFACE_METHOD(MarshalBytes, GetData, This)
 #    define IMarshalBytes_MapRead(This, ...) CALL_IFACE_METHOD(MarshalBytes, MapRead, This, __VA_ARGS__)
 #    define IMarshalBytes_UnmapRead(This) CALL_IFACE_METHOD(MarshalBytes, UnmapRead, This)
 #endif
@@ -75,6 +86,14 @@ DILIGENT_END_INTERFACE
 MARSHAL_STATUS DILIGENT_GLOBAL_FUNCTION(CreateMarshalBytes)(const MarshalBufferDesc REF Desc, IMarshalBytes** ppBuffer);
 Uint32 DILIGENT_GLOBAL_FUNCTION(ChecksumBytes)(const void* pBytes, Uint64 ByteCount, Bool Invert);
 Bool DILIGENT_GLOBAL_FUNCTION(CheckBytes)(Uint32 ByteCount, const Uint8* pBytes);
+const void* DILIGENT_GLOBAL_FUNCTION(EchoByteSpan)(const void* pBytes, Uint64 ByteCount);
+Bool DILIGENT_GLOBAL_FUNCTION(ByteSpanHasStorage)(const void* pBytes, Uint64 ByteCount);
+const MarshalBufferDesc REF DILIGENT_GLOBAL_FUNCTION(EchoBufferDesc)(const MarshalBufferDesc REF Desc);
+const MarshalBytePacket REF DILIGENT_GLOBAL_FUNCTION(EchoBytePacket)(const MarshalBytePacket REF Desc, Bool InvalidLabel);
+MARSHAL_STATUS DILIGENT_GLOBAL_FUNCTION(FillByteSpan)(void* pBytes, Uint64 Capacity, Uint64 REF Written, Bool InvalidWritten);
+MARSHAL_STATUS DILIGENT_GLOBAL_FUNCTION(FillByteCapacity)(void* pBytes, Uint64 Capacity, Bool Fail);
+void DILIGENT_GLOBAL_FUNCTION(CopyBufferBytes)(void* pBytes, const IMarshalBytes REF Source);
+Uint32 DILIGENT_GLOBAL_FUNCTION(GetByteSpanCallCount)(void);
 Uint32 DILIGENT_GLOBAL_FUNCTION(GetLiveBufferCount)(void);
 Uint32 DILIGENT_GLOBAL_FUNCTION(GetBufferReleaseCount)(void);
 Uint64 DILIGENT_GLOBAL_FUNCTION(GetTestHeapSize)(void);

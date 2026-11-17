@@ -138,8 +138,11 @@ class Generator(BindingAPI):
             if {"length", "length_method", "length_from"} & p.keys():
                 info = self.scalar_info(target)
                 record = self.types.get(target.get("name"), {}).get("kind") == "record"
-                if (not info or info[0] == "void") and not self.interface_element(target) and not record:
-                    raise ModelError("Java: arrays require scalar, enum, interface, or descriptor elements")
+                if target["kind"] == "void":
+                    if t["kind"] != "pointer" or target["volatile"]:
+                        raise ModelError("Java: byte spans require non-volatile void pointers")
+                elif not info and not self.interface_element(target) and not record:
+                    raise ModelError("Java: arrays require scalar, enum, interface, descriptor, or byte elements")
                 return "array", target
             if target.get("kind") == "scalar" and target.get("name") in ("char_s", "char_u") and target["const"]:
                 return "string", target
@@ -148,6 +151,8 @@ class Generator(BindingAPI):
                 return "interface", target
             if declaration.get("kind") == "record":
                 return "record", target
+            if target["kind"] == "void":
+                raise ModelError("Java: raw byte pointers require a length")
             if p.get("direction") == "out":
                 return self.shape(dict(value, type=target, policy={k: v for k, v in p.items() if k != "direction"}))
             raise ModelError("Java: unsupported pointer or reference")
@@ -167,6 +172,8 @@ class Generator(BindingAPI):
             array_jni = jni + "Array" if self.shape({"type": t["element"]})[0] == "scalar" else "jobjectArray"
             return java + "[]", array_jni, "[" + sig, "Object"
         if kind == "array":
+            if t["kind"] == "void":
+                return "byte[]", "jbyteArray", "[B", "Object"
             java, jni, sig, suffix = self.info({"type": t})
             array_jni = jni + "Array" if self.scalar_info(t) else "jobjectArray"
             return java + "[]", array_jni, "[" + sig, "Object"
@@ -211,6 +218,8 @@ class Generator(BindingAPI):
             if policy.get("ownership") != "borrowed":
                 raise ModelError(f"Java: {context}: owned inputs require a transfer adapter")
         kind, target = self.shape(value)
+        if kind == "array" and target["kind"] == "void" and not target["const"]:
+            raise ModelError(f"Java: {context}: writable byte inputs require a copyback adapter")
         if kind == "record":
             for field in self.record_fields(target["name"]):
                 self.validate_input(field, target["name"] + "::" + field["name"])
@@ -245,12 +254,17 @@ class Generator(BindingAPI):
         lines = [f"{self.array_storage(t)} {var};"] + self.read_array(value, expr, var, count, var)
         return lines, self.array_data(t, var)
 
+    @staticmethod
+    def array_native_type(element):
+        # Byte storage preserves object representations without numeric widening.
+        return "unsigned char" if element["kind"] == "void" else mutable_type(element)
+
     def array_storage(self, element):
         interface = self.interface_element(element)
         if interface:
             return f"InterfaceArray<{interface['name']}>"
         if self.scalar_info(element):
-            return f"std::unique_ptr<{mutable_type(element)}[]>"
+            return f"std::unique_ptr<{self.array_native_type(element)}[]>"
         return f"DescriptorArray<{mutable_type(element)}, Input{self.short(element['name'])}>"
 
     def array_data(self, element, storage):
@@ -268,7 +282,7 @@ class Generator(BindingAPI):
         if interface:
             return [self.read_interface_array(value, interface, expr, count, storage)]
         nullable = str(value.get("policy", {}).get("nullable", False)).lower()
-        native = mutable_type(t)
+        native = self.array_native_type(t)
         # Required arrays normalize null with count zero to non-null empty storage.
         allocation = f"new {native}[static_cast<size_t>({var}Count)]{{}}"
         if value.get("policy", {}).get("nullable", False):
@@ -276,6 +290,9 @@ class Generator(BindingAPI):
         lines = [f'Require(Env, {expr} != nullptr || {nullable} || {count} == 0, "Nonempty array is null");',
                  f"const jsize {var}Count = {expr} ? ArrayCount(Env, {count}) : 0;",
                  f'if ({expr}) Require(Env, Env->GetArrayLength({expr}) >= {var}Count, "Array is shorter than its count");']
+        if t["kind"] == "void":
+            return lines + [f"{storage}.reset({allocation});",
+                            f"if ({var}Count) Env->GetByteArrayRegion({expr}, 0, {var}Count, reinterpret_cast<jbyte*>({storage}.get()));", "Check(Env);"]
         scalar = self.scalar_info(t)
         if scalar:
             _, jni, _, suffix = scalar
@@ -411,6 +428,9 @@ class Generator(BindingAPI):
                  f"const jsize {var}Count = {expr} ? ArrayCount(Env, {count}) : 0;"]
         # Constructors preserve incomplete defaults, just as interface-array fields do.
         absent = f"({expr} == nullptr && ({nullable} || !{validate_required}))"
+        if t["kind"] == "void":
+            return lines + [f"const LocalRef<jbyteArray> {var}{{Env, {absent} ? nullptr : Env->NewByteArray({var}Count)}};",
+                            f"if ({var}Count) Env->SetByteArrayRegion({var}.Get(), 0, {var}Count, reinterpret_cast<const jbyte*>({expr}));", "Check(Env);"], var + ".Get()"
         if not elem:
             lines += [f'const LocalRef<jclass> {var}Class{{Env, Env->FindClass("{self.path}${self.short(t["name"])}")}};',
                       f"const LocalRef<jobjectArray> {var}{{Env, {absent} ? nullptr : Env->NewObjectArray({var}Count, {var}Class.Get(), nullptr)}};"]
@@ -435,6 +455,8 @@ class Generator(BindingAPI):
             java, jni, sig, suffix = self.info(field)
             if kind not in ("scalar", "string", "record", "fixed_array", "interface", "array") or unalias(field["type"])["kind"] == "reference":
                 raise ModelError(f"Java: unsupported descriptor field {name}::{member}")
+            if kind == "array" and t["kind"] == "void" and not t["const"]:
+                raise ModelError("Java: writable byte fields require a copyback adapter")
             pointer_field = kind == "record" and unalias(field["type"])["kind"] == "pointer"
             if pointer_field and not t["const"]:
                 raise ModelError("Java: descriptor pointer fields require const data; mutable pointees need a copyback adapter")
@@ -648,7 +670,7 @@ static inline void Write{short}Fields(JNIEnv* Env, jobject Object, const {name}&
                     else:
                         count = length(p)
                     lines += [f"const jsize {var}Count = ArrayCount(Env, {count});",
-                              f"std::unique_ptr<{mutable_type(t)}[]> {var}(new {mutable_type(t)}[static_cast<size_t>({var}Count)]{{}});"]
+                              f"std::unique_ptr<{self.array_native_type(t)}[]> {var}(new {self.array_native_type(t)}[static_cast<size_t>({var}Count)]{{}});"]
                     expr = var + ".get()"
                 elif kind == "record":
                     lines += [f"ValueStorage<{mutable_type(original['target'])}> {var};"]
