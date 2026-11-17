@@ -24,33 +24,37 @@
  *  of the possibility of such damages.
  */
 
-#include "OutputBuffers.h"
-#include <algorithm>
-#include <emscripten/heap.h>
+#include "OutputParameters.h"
+#include "MemoryTestHooks.hpp"
 
 namespace Diligent
 {
 
-MARSHAL_STATUS FillIds(Uint32 Capacity, Uint64* pIds, Uint32& Written, Bool InvalidCount, Bool Grow)
+MARSHAL_STATUS ReadReferenceOutput(MARSHAL_STATUS Status, Uint64& Value)
+{
+    if (Status != MARSHAL_STATUS_FAILED)
+        Value = 0xfedcba9876543210ull;
+    return Status;
+}
+MARSHAL_STATUS ReadRecordOutput(Bool Write, Bool Grow, Bool InvalidText, MarshalOutputRecord& Value)
 {
     if (Grow)
-        emscripten_resize_heap(emscripten_get_heap_size() + 65536);
-    Written = std::min(Capacity, 2u);
-    for (Uint32 i = 0; i < Written; ++i)
-        pIds[i] = 0xfedcba9876543210ull + i;
-    if (InvalidCount)
-        Written = Capacity + 1;
-    return MARSHAL_STATUS_PENDING;
+        GrowTestHeap();
+    if (Write)
+    {
+        Value.Value   = 0xfedcba9876543210ull;
+        Value.Data[1] = 2.5f;
+        Value.Label   = "native output";
+    }
+    static constexpr Char Invalid[] = {static_cast<Char>(0xc3), 'x', 0};
+    if (InvalidText)
+        Value.Label = Invalid;
+    return Write ? MARSHAL_STATUS_PENDING : MARSHAL_STATUS_FAILED;
 }
-void FillRecords(Uint32 Capacity, MarshalOutputRecord* pRecords)
+void MakeRecordOutput(MarshalOutputRecord* pValue)
 {
-    for (Uint32 i = 0; i < Capacity; ++i)
-        pRecords[i].Value = i + 100;
-}
-void FillMultiple(Uint32& Count, const Char** ppLabel)
-{
-    Count    = 9;
-    *ppLabel = "multiple";
+    pValue->Value   = 42;
+    pValue->Data[2] = -3;
 }
 
 } // namespace Diligent

@@ -24,7 +24,7 @@
  *  of the possibility of such damages.
  */
 
-#include "Interfaces.h"
+#include "BrowserFixtures.h"
 
 // Compile the same declarations with their actual C interface definitions.
 Uint64 CheckCInterface(IMarshalMutableObject* pObject)

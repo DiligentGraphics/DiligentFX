@@ -30,7 +30,6 @@ namespace Diligent
 {
 namespace
 {
-Uint32 RecordedValue    = 0;
 Uint32 LiveObjectCount  = 0;
 Uint32 DestructionCount = 0;
 
@@ -44,7 +43,7 @@ public:
         ++LiveObjectCount;
     }
 
-    void QueryInterface(const INTERFACE_ID& IID, IObject** ppObject) override
+    void DILIGENT_CALL_TYPE QueryInterface(const INTERFACE_ID& IID, IObject** ppObject) override
     {
         *ppObject = nullptr;
         if (IID == IID_Unknown || IID == IID_MarshalObject || (m_Mutable && IID == IID_MarshalMutableObject))
@@ -53,33 +52,33 @@ public:
             AddRef();
         }
     }
-    ReferenceCounterValueType AddRef() override { return ++m_RefCount; }
-    ReferenceCounterValueType Release() override
+    ReferenceCounterValueType DILIGENT_CALL_TYPE AddRef() override { return ++m_RefCount; }
+    ReferenceCounterValueType DILIGENT_CALL_TYPE Release() override
     {
         const Uint32 Count = --m_RefCount;
         if (Count == 0)
             delete this;
         return Count;
     }
-    IReferenceCounters*          GetReferenceCounters() const override { return nullptr; }
-    Uint64                       GetSize() const override { return m_Size; }
-    const MarshalNativeOnlyDesc& GetNativeDesc() const override
+    IReferenceCounters* DILIGENT_CALL_TYPE          GetReferenceCounters() const override { return nullptr; }
+    Uint64 DILIGENT_CALL_TYPE                       GetSize() const override { return m_Size; }
+    const MarshalNativeOnlyDesc& DILIGENT_CALL_TYPE GetNativeDesc() const override
     {
         static const MarshalNativeOnlyDesc Desc{41};
         return Desc;
     }
-    Uint32         GetRefCount() const override { return m_RefCount; }
-    MARSHAL_STATUS SetSize(Uint64 Size) override
+    Uint32 DILIGENT_CALL_TYPE         GetRefCount() const override { return m_RefCount; }
+    MARSHAL_STATUS DILIGENT_CALL_TYPE SetSize(Uint64 Size) override
     {
         m_Size = Size;
         return MARSHAL_STATUS_PENDING;
     }
 
-    MARSHAL_STATUS CopySizeFrom(const IMarshalObject& Source) override
+    MARSHAL_STATUS DILIGENT_CALL_TYPE CopySizeFrom(const IMarshalObject& Source) override
     {
         return SetSize(Source.GetSize());
     }
-    MARSHAL_STATUS CopySizeTo(IMarshalMutableObject& Destination) const override
+    MARSHAL_STATUS DILIGENT_CALL_TYPE CopySizeTo(IMarshalMutableObject& Destination) const override
     {
         return Destination.SetSize(GetSize());
     }
@@ -96,47 +95,6 @@ private:
 };
 } // namespace
 
-Int8           EchoInt8(Int8 Value) { return Value; }
-Uint8          EchoUint8(Uint8 Value) { return Value; }
-Int16          EchoInt16(Int16 Value) { return Value; }
-Uint16         EchoUint16(Uint16 Value) { return Value; }
-Int32          EchoInt32(Int32 Value) { return Value; }
-Uint32         EchoUint32(Uint32 Value) { return Value; }
-Int64          EchoInt64(Int64 Value) { return Value; }
-Uint64         EchoUint64(Uint64 Value) { return Value; }
-Float32        EchoFloat(Float32 Value) { return Value; }
-Float64        EchoDouble(Float64 Value) { return Value; }
-Bool           InvertBool(Bool Value) { return !Value; }
-MARSHAL_MODE   EchoMode(MARSHAL_MODE Mode) { return Mode; }
-MARSHAL_STATUS EchoStatus(MARSHAL_STATUS Status) { return Status; }
-
-Bool CheckScalars(Int8 SignedByte, Uint32 UnsignedWord, Int64 SignedWide, Uint64 UnsignedWide, Float32 Single, Float64 Double, Bool Enabled, MARSHAL_MODE Mode)
-{
-    return SignedByte == -101 && UnsignedWord == 0xFEDCBA98u &&
-        SignedWide == -0x123456789ABCDEFll && UnsignedWide == 0xFEDCBA9876543210ull &&
-        Single == 1.25f && Double == -2.5 && Enabled && Mode == MARSHAL_MODE_LAST;
-}
-Uint64         GetWideConstant() { return 0xFEDCBA9876543210ull; }
-MARSHAL_STATUS ReadWideOutput(Bool Fail, Uint64* pValue)
-{
-    if (Fail)
-        return MARSHAL_STATUS_FAILED;
-    *pValue = 0xFEDCBA9876543210ull;
-    return MARSHAL_STATUS_OK;
-}
-void   RecordValue(Uint32 Value) { RecordedValue = Value; }
-Uint32 GetRecordedValue() { return RecordedValue; }
-
-Bool CheckDefaultDesc(const MarshalDesc& Desc)
-{
-    return Desc.Size == 0xFEDCBA9876543210ull && Desc.Count == -13 && Desc.Scale == 1.25f &&
-        Desc.Weight == -2.5 && Desc.Enabled && Desc.Mode == MARSHAL_MODE_LAST;
-}
-Bool CheckCustomDesc(const MarshalDesc& Desc)
-{
-    return Desc.Size == 0x123456789ABCDEF0ull && Desc.Count == 19 && Desc.Scale == -3.5f &&
-        Desc.Weight == 0.125 && !Desc.Enabled && Desc.Mode == MARSHAL_MODE_FIRST;
-}
 MARSHAL_STATUS CreateMarshalObject(const MarshalDesc& Desc, MARSHAL_STATUS Status, Bool Mutable, IMarshalObject** ppObject)
 {
     *ppObject = nullptr;

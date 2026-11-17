@@ -28,7 +28,7 @@
 
 #include <cstring>
 #include <vector>
-#include <emscripten/heap.h>
+#include "MemoryTestHooks.hpp"
 
 namespace Diligent
 {
@@ -52,7 +52,7 @@ public:
         ++LiveBufferCount;
     }
 
-    void QueryInterface(const INTERFACE_ID& IID, IObject** ppObject) override
+    void DILIGENT_CALL_TYPE QueryInterface(const INTERFACE_ID& IID, IObject** ppObject) override
     {
         *ppObject = nullptr;
         if (IID == IID_Unknown || IID == IID_MarshalBytes)
@@ -61,23 +61,23 @@ public:
             AddRef();
         }
     }
-    ReferenceCounterValueType AddRef() override { return ++m_Refs; }
-    ReferenceCounterValueType Release() override
+    ReferenceCounterValueType DILIGENT_CALL_TYPE AddRef() override { return ++m_Refs; }
+    ReferenceCounterValueType DILIGENT_CALL_TYPE Release() override
     {
         const Uint32 Count = --m_Refs;
         if (Count == 0)
             delete this;
         return Count;
     }
-    IReferenceCounters* GetReferenceCounters() const override { return nullptr; }
-    Uint64              Size() const override { return m_ReportedSize; }
-    Uint32              RefCount() const override { return m_Refs; }
-    Uint32              ReaderCount() const override { return m_Readers; }
-    Bool                IsWriting() const override { return m_Writing; }
-    void                SetReportedSize(Uint64 Size) override { m_ReportedSize = Size; }
-    void                SetReleaseStatus(MARSHAL_STATUS Status) override { m_ReleaseStatus = Status; }
+    IReferenceCounters* DILIGENT_CALL_TYPE GetReferenceCounters() const override { return nullptr; }
+    Uint64 DILIGENT_CALL_TYPE              Size() const override { return m_ReportedSize; }
+    Uint32 DILIGENT_CALL_TYPE              RefCount() const override { return m_Refs; }
+    Uint32 DILIGENT_CALL_TYPE              ReaderCount() const override { return m_Readers; }
+    Bool DILIGENT_CALL_TYPE                IsWriting() const override { return m_Writing; }
+    void DILIGENT_CALL_TYPE                SetReportedSize(Uint64 Size) override { m_ReportedSize = Size; }
+    void DILIGENT_CALL_TYPE                SetReleaseStatus(MARSHAL_STATUS Status) override { m_ReleaseStatus = Status; }
 
-    MARSHAL_STATUS MapRead(const void** ppData) override
+    MARSHAL_STATUS DILIGENT_CALL_TYPE MapRead(const void** ppData) override
     {
         *ppData = nullptr;
         if (m_Writing)
@@ -86,7 +86,7 @@ public:
         *ppData = m_Data.empty() ? nullptr : m_Data.data();
         return MARSHAL_STATUS_OK;
     }
-    MARSHAL_STATUS UnmapRead() override
+    MARSHAL_STATUS DILIGENT_CALL_TYPE UnmapRead() override
     {
         if (m_Readers == 0)
             return MARSHAL_STATUS_FAILED;
@@ -94,7 +94,7 @@ public:
         ++ReleaseCount;
         return m_ReleaseStatus;
     }
-    MARSHAL_STATUS MapWrite(void** ppData) override
+    MARSHAL_STATUS DILIGENT_CALL_TYPE MapWrite(void** ppData) override
     {
         *ppData = nullptr;
         if (m_Writing || m_Readers != 0)
@@ -103,7 +103,7 @@ public:
         *ppData   = m_Data.empty() ? nullptr : m_Data.data();
         return MARSHAL_STATUS_PENDING;
     }
-    MARSHAL_STATUS UnmapWrite() override
+    MARSHAL_STATUS DILIGENT_CALL_TYPE UnmapWrite() override
     {
         if (!m_Writing)
             return MARSHAL_STATUS_FAILED;
@@ -111,7 +111,7 @@ public:
         ++ReleaseCount;
         return m_ReleaseStatus;
     }
-    MARSHAL_STATUS Resize(Uint64 Size) override
+    MARSHAL_STATUS DILIGENT_CALL_TYPE Resize(Uint64 Size) override
     {
         if (m_Readers != 0 || m_Writing || Size > 1024 * 1024)
             return MARSHAL_STATUS_FAILED;
@@ -153,6 +153,4 @@ Bool CheckBytes(Uint32 ByteCount, const Uint8* pBytes)
 }
 Uint32 GetLiveBufferCount() { return LiveBufferCount; }
 Uint32 GetBufferReleaseCount() { return ReleaseCount; }
-Uint64 GetTestHeapSize() { return emscripten_get_heap_size(); }
-Bool   GrowTestHeap() { return emscripten_resize_heap(emscripten_get_heap_size() + 65536) != 0; }
 } // namespace Diligent

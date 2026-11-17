@@ -69,6 +69,7 @@ Uint64 DILIGENT_GLOBAL_FUNCTION(GetWideConstant)(void);
 MARSHAL_STATUS DILIGENT_GLOBAL_FUNCTION(ReadWideOutput)(Bool Fail, Uint64* pValue);
 void DILIGENT_GLOBAL_FUNCTION(RecordValue)(Uint32 Value);
 Uint32 DILIGENT_GLOBAL_FUNCTION(GetRecordedValue)(void);
+Uint32 DILIGENT_GLOBAL_FUNCTION(GetCallCount)(void);
 
 // clang-format on
 

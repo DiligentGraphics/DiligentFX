@@ -31,6 +31,9 @@ of Radient declarations and language-specific generation:
 - `tests/` contains focused enum, struct, interface, function, constant, and typedef
   fixtures using the actual Diligent headers and macros, plus extraction and policy
   unit tests.
+- `tests/native/` is the shared native reference for Java and JavaScript marshalling
+  tests. Both backends compile these fixtures; future backends should reuse them.
+  See [the fixture guide](tests/native/README.md) for shared policies and runtime hooks.
 - `javascript/` emits Wasm call glue, JavaScript wrappers, and TypeScript declarations.
   Its standalone tests execute generated bindings against native test objects in Node.
 - `Radient/bindings/` contains Radient's configuration, build targets, and

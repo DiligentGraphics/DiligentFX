@@ -25,7 +25,7 @@
  */
 
 #pragma once
-#include "Scalars.h"
+#include "TestScalars.h"
 
 DILIGENT_BEGIN_NAMESPACE(Diligent)
 // clang-format off
@@ -62,7 +62,7 @@ typedef struct RequiredNestedDesc RequiredNestedDesc;
 #include "DefineRefMacro.h"
 const Char* DILIGENT_GLOBAL_FUNCTION(ReadRequiredName)(const RequiredNestedDesc REF Desc);
 const RequiredNestedDesc REF DILIGENT_GLOBAL_FUNCTION(GetIncompleteDesc)();
-Bool DILIGENT_GLOBAL_FUNCTION(CheckDefaultDesc)(const TestDesc REF Desc);
+Bool DILIGENT_GLOBAL_FUNCTION(CheckNestedDefaultDesc)(const TestDesc REF Desc);
 TEST_STATUS DILIGENT_GLOBAL_FUNCTION(CopyDesc)(const TestDesc REF Desc, TestDesc REF Result);
 void DILIGENT_GLOBAL_FUNCTION(CopyDescPointer)(const TestDesc REF Desc, TestDesc* pResult);
 void DILIGENT_GLOBAL_FUNCTION(MakeOutputs)(Uint32 Seed, Uint64 REF Value, TestVector REF Vector);

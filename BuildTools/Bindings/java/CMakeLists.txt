@@ -15,6 +15,7 @@ set(BINDINGS_LIBCLANG "" CACHE FILEPATH "LLVM 22 libclang library")
 get_filename_component(BINDING_TOOLS "${CMAKE_CURRENT_SOURCE_DIR}/.." ABSOLUTE)
 get_filename_component(CORE_SOURCE "${BINDING_TOOLS}/../../../DiligentCore" ABSOLUTE)
 set(TEST_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/tests")
+set(NATIVE_FIXTURES "${BINDING_TOOLS}/tests/native")
 set(GENERATED "${CMAKE_CURRENT_BINARY_DIR}/generated")
 set(MODEL "${GENERATED}/BindingTests.json")
 set(PYTHON_COMMAND "${BINDINGS_PYTHON_EXECUTABLE}" -B)
@@ -44,6 +45,7 @@ else()
     set(PLATFORM_DEFINITION PLATFORM_LINUX=1)
 endif()
 set(PARSER_ARGUMENTS "--target=${BINDING_TARGET}"
+    "--clang-arg=-I${NATIVE_FIXTURES}"
     "--clang-arg=-I${CORE_SOURCE}/Primitives/interface" "--clang-arg=-D${PLATFORM_DEFINITION}")
 foreach(INCLUDE_DIR IN LISTS CMAKE_CXX_IMPLICIT_INCLUDE_DIRECTORIES)
     list(APPEND PARSER_ARGUMENTS "--clang-arg=-isystem${INCLUDE_DIR}")
@@ -54,21 +56,20 @@ endif()
 
 add_custom_target(Bindings-GenerateJavaTests
     COMMAND ${PYTHON_COMMAND} "${BINDING_TOOLS}/generate.py"
-        --source-root "${TEST_SOURCE}" --config "${TEST_SOURCE}/API.json"
+        --source-root "${BINDING_TOOLS}" --config "${TEST_SOURCE}/API.json"
         --output "${MODEL}" ${PARSER_ARGUMENTS}
     COMMAND ${PYTHON_COMMAND} "${CMAKE_CURRENT_SOURCE_DIR}/generate.py"
         --model "${MODEL}" --module BindingTests --package diligent.bindings.tests
-        --library BindingTestsJNI --header Scalars.h --header Descriptors.h --header StringMarshalling.h
-        --header Arrays.h --header Interfaces.h --header JavaNames.h
-        --header FixedArrays.h --header Constants.h --output "${GENERATED}"
+        --library BindingTestsJNI --header BindingTestAPI.h --header JavaNames.h
+        --header NativeExceptions.h --output "${GENERATED}"
     BYPRODUCTS "${MODEL}" "${GENERATED}/BindingTests.java" "${GENERATED}/BindingTests.cpp"
     COMMENT "Generating Java/JNI binding test API"
     VERBATIM)
 
-file(GLOB FIXTURE_SOURCES CONFIGURE_DEPENDS "${TEST_SOURCE}/fixtures/*.cpp")
+file(GLOB FIXTURE_SOURCES CONFIGURE_DEPENDS "${NATIVE_FIXTURES}/*.cpp" "${TEST_SOURCE}/fixtures/*.cpp")
 add_library(BindingTestsJNI SHARED "${GENERATED}/BindingTests.cpp" ${FIXTURE_SOURCES})
 add_dependencies(BindingTestsJNI Bindings-GenerateJavaTests)
-target_include_directories(BindingTestsJNI PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}" "${TEST_SOURCE}/fixtures"
+target_include_directories(BindingTestsJNI PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}" "${TEST_SOURCE}/fixtures" "${NATIVE_FIXTURES}"
     "${CORE_SOURCE}/Primitives/interface" ${JNI_INCLUDE_DIRS})
 target_compile_features(BindingTestsJNI PRIVATE cxx_std_17)
 target_compile_definitions(BindingTestsJNI PRIVATE ${PLATFORM_DEFINITION})

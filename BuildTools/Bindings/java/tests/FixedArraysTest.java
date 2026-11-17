@@ -46,12 +46,12 @@ public final class FixedArraysTest {
             desc.Matrix[0] = 19;
             equal(1.f, another.Matrix[0]);
         });
-        run("FixedArrays.NativeInputValidation", () -> check(CheckFixedInputs(input())));
+        run("FixedArrays.NativeInputValidation", () -> check(CheckFixedDescriptorInputs(input())));
         run("FixedArrays.IndependentOutputSnapshots", () -> {
             TestFixedArrays source = input();
             TestFixedArrays copy = CopyFixedArrays(source).Result;
-            check(CheckFixedInputs(copy));
-            check(CheckFixedInputs(EchoFixedArrays(source)));
+            check(CheckFixedDescriptorInputs(copy));
+            check(CheckFixedDescriptorInputs(EchoFixedDescriptorArrays(source)));
             check(source.Matrix != copy.Matrix);
             check(source.Rows[1] != copy.Rows[1]);
             check(source.Children[1] != copy.Children[1]);
@@ -60,62 +60,62 @@ public final class FixedArraysTest {
             source.Children[1].Label = "changed";
             source.Children[1].Samples[0] = 0;
             source.Grid[1][0].Label = "changed";
-            check(CheckFixedInputs(copy));
+            check(CheckFixedDescriptorInputs(copy));
             // Heap-backed strings inside descriptor arrays must survive all
             // element conversions and the native call.
             source.Children[0].Label = "first ".repeat(64) + "\uD83D\uDE00";
             source.Grid[1][0].Label = "grid ".repeat(64);
-            TestFixedArrays longNames = EchoFixedArrays(source);
+            TestFixedArrays longNames = EchoFixedDescriptorArrays(source);
             equal(source.Children[0].Label, longNames.Children[0].Label);
             equal(source.Grid[1][0].Label, longNames.Grid[1][0].Label);
             throwsType(IllegalArgumentException.class, BindingTests::GetIncompleteFixedArrays);
         });
         run("FixedArrays.ExactLengthsBeforeNativeCall", () -> {
-            long calls = GetFixedCallCount();
+            long calls = GetFixedDescriptorCallCount();
             for (int length : new int[]{0, 15, 17}) {
                 TestFixedArrays desc = input();
                 desc.Matrix = new float[length];
-                throwsType(IllegalArgumentException.class, () -> CheckFixedInputs(desc));
+                throwsType(IllegalArgumentException.class, () -> CheckFixedDescriptorInputs(desc));
             }
             TestFixedArrays desc = input();
             desc.Matrix = null;
-            throwsType(IllegalArgumentException.class, () -> CheckFixedInputs(desc));
+            throwsType(IllegalArgumentException.class, () -> CheckFixedDescriptorInputs(desc));
             desc.Matrix = new float[16];
             desc.Rows[1] = new float[3];
-            throwsType(IllegalArgumentException.class, () -> CheckFixedInputs(desc));
+            throwsType(IllegalArgumentException.class, () -> CheckFixedDescriptorInputs(desc));
             desc.Rows[1] = null;
-            throwsType(IllegalArgumentException.class, () -> CheckFixedInputs(desc));
+            throwsType(IllegalArgumentException.class, () -> CheckFixedDescriptorInputs(desc));
             desc.Rows = new float[1][4];
-            throwsType(IllegalArgumentException.class, () -> CheckFixedInputs(desc));
-            equal(calls, GetFixedCallCount());
+            throwsType(IllegalArgumentException.class, () -> CheckFixedDescriptorInputs(desc));
+            equal(calls, GetFixedDescriptorCallCount());
         });
         run("FixedArrays.ElementValidationBeforeNativeCall", () -> {
-            long calls = GetFixedCallCount();
+            long calls = GetFixedDescriptorCallCount();
             TestFixedArrays desc = input();
             desc.Bytes[0] = 256;
-            throwsType(IllegalArgumentException.class, () -> CheckFixedInputs(desc));
+            throwsType(IllegalArgumentException.class, () -> CheckFixedDescriptorInputs(desc));
             desc.Bytes[0] = -1;
-            throwsType(IllegalArgumentException.class, () -> CheckFixedInputs(desc));
+            throwsType(IllegalArgumentException.class, () -> CheckFixedDescriptorInputs(desc));
             desc.Bytes[0] = 0;
             desc.UnsignedShorts[0] = 65536;
-            throwsType(IllegalArgumentException.class, () -> CheckFixedInputs(desc));
+            throwsType(IllegalArgumentException.class, () -> CheckFixedDescriptorInputs(desc));
             desc.UnsignedShorts[0] = 0;
             desc.UnsignedInts[0] = 0x100000000L;
-            throwsType(IllegalArgumentException.class, () -> CheckFixedInputs(desc));
+            throwsType(IllegalArgumentException.class, () -> CheckFixedDescriptorInputs(desc));
             desc.UnsignedInts[0] = 0;
             desc.Modes[0] = 256;
-            throwsType(IllegalArgumentException.class, () -> CheckFixedInputs(desc));
+            throwsType(IllegalArgumentException.class, () -> CheckFixedDescriptorInputs(desc));
             desc.Modes[0] = 0;
             desc.Children[1].Label = null;
-            throwsType(IllegalArgumentException.class, () -> CheckFixedInputs(desc));
+            throwsType(IllegalArgumentException.class, () -> CheckFixedDescriptorInputs(desc));
             desc.Children[1] = null;
-            throwsType(IllegalArgumentException.class, () -> CheckFixedInputs(desc));
+            throwsType(IllegalArgumentException.class, () -> CheckFixedDescriptorInputs(desc));
             desc.Children = new TestFixedChild[0];
-            throwsType(IllegalArgumentException.class, () -> CheckFixedInputs(desc));
+            throwsType(IllegalArgumentException.class, () -> CheckFixedDescriptorInputs(desc));
             TestFixedArrays nested = input();
             nested.Grid[1][0].Samples = null;
-            throwsType(IllegalArgumentException.class, () -> CheckFixedInputs(nested));
-            equal(calls, GetFixedCallCount());
+            throwsType(IllegalArgumentException.class, () -> CheckFixedDescriptorInputs(nested));
+            equal(calls, GetFixedDescriptorCallCount());
         });
     }
 }

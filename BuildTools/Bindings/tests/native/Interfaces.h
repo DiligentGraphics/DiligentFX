@@ -117,5 +117,3 @@ Uint32 DILIGENT_GLOBAL_FUNCTION(GetDestructionCount)(void);
 
 // clang-format on
 DILIGENT_END_NAMESPACE
-
-#include "VirtualFiles.h"

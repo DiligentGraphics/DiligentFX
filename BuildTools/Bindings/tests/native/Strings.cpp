@@ -25,10 +25,11 @@
  */
 
 #include "StringMarshalling.h"
+#include "Text.h"
 
 #include <cstring>
 #include <string>
-#include <emscripten/heap.h>
+#include "MemoryTestHooks.hpp"
 
 namespace Diligent
 {
@@ -50,7 +51,7 @@ public:
         ++LiveStringCount;
     }
 
-    void QueryInterface(const INTERFACE_ID& IID, IObject** ppObject) override
+    void DILIGENT_CALL_TYPE QueryInterface(const INTERFACE_ID& IID, IObject** ppObject) override
     {
         *ppObject = nullptr;
         if (IID == IID_Unknown || IID == IID_MarshalStrings)
@@ -59,24 +60,24 @@ public:
             AddRef();
         }
     }
-    ReferenceCounterValueType AddRef() override { return ++m_Refs; }
-    ReferenceCounterValueType Release() override
+    ReferenceCounterValueType DILIGENT_CALL_TYPE AddRef() override { return ++m_Refs; }
+    ReferenceCounterValueType DILIGENT_CALL_TYPE Release() override
     {
         const Uint32 Count = --m_Refs;
         if (Count == 0)
             delete this;
         return Count;
     }
-    IReferenceCounters* GetReferenceCounters() const override { return nullptr; }
+    IReferenceCounters* DILIGENT_CALL_TYPE GetReferenceCounters() const override { return nullptr; }
 
-    void SetText(const Char* Text) override
+    void DILIGENT_CALL_TYPE SetText(const Char* Text) override
     {
         m_IsNull = Text == nullptr;
         m_Text   = Text != nullptr ? Text : "";
     }
-    const Char* GetText() const override { return m_IsNull ? nullptr : m_Text.c_str(); }
+    const Char* DILIGENT_CALL_TYPE GetText() const override { return m_IsNull ? nullptr : m_Text.c_str(); }
 
-    MARSHAL_STATUS ReadText(Bool Fail, const Char*& Text) const override
+    MARSHAL_STATUS DILIGENT_CALL_TYPE ReadText(Bool Fail, const Char*& Text) const override
     {
         // Leave the output untouched on failure to check wrapper initialization.
         if (Fail)
@@ -84,7 +85,7 @@ public:
         Text = GetText();
         return MARSHAL_STATUS_PENDING;
     }
-    MARSHAL_STATUS ReadTextPointer(Bool Fail, const Char** ppText) const override
+    MARSHAL_STATUS DILIGENT_CALL_TYPE ReadTextPointer(Bool Fail, const Char** ppText) const override
     {
         return ReadText(Fail, *ppText);
     }
@@ -116,13 +117,13 @@ const Char* EchoString(const Char* Text, Bool GrowHeap)
 {
     ++StringCallCount;
     if (GrowHeap)
-        emscripten_resize_heap(emscripten_get_heap_size() + 65536);
-    return Text;
+        GrowTestHeap();
+    return EchoText(Text);
 }
 const char* EchoNullableString(const char* Text)
 {
     ++StringCallCount;
-    return Text;
+    return EchoOptionalText(Text);
 }
 Bool CheckStringBytes(const Char* Text) { return std::strcmp(Text, UTF8Text) == 0; }
 Bool CheckCharacterBytes(Uint32 ByteCount, const Char* Bytes)

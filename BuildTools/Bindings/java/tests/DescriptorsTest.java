@@ -6,7 +6,7 @@ import static diligent.bindings.tests.TestSupport.*;
 
 public final class DescriptorsTest {
     public static void main(java.lang.String[] args) {
-        run("Descriptors.NativeDefaults", () -> check(CheckDefaultDesc(new TestDesc())));
+        run("Descriptors.NativeDefaults", () -> check(CheckNestedDefaultDesc(new TestDesc())));
         run("Descriptors.IncompleteRequiredDefaults", () -> {
             RequiredDesc leaf = new RequiredDesc();
             equal(null, leaf.Name);
@@ -46,7 +46,7 @@ public final class DescriptorsTest {
             source.Position.X = 5;
             equal(-9.25f, copy.Result.Position.X);
         });
-        run("Descriptors.StructPointerOutput", () -> check(CheckDefaultDesc(CopyDescPointer(new TestDesc()).pResult)));
+        run("Descriptors.StructPointerOutput", () -> check(CheckNestedDefaultDesc(CopyDescPointer(new TestDesc()).pResult)));
         run("Descriptors.MultipleOutputs", () -> {
             MakeOutputsResult result = MakeOutputs(23);
             equal(0xFEDCBA9800000017L, result.Value);
@@ -58,8 +58,8 @@ public final class DescriptorsTest {
         });
         run("Descriptors.NullablePointer", () -> {
             equal(null, EchoOptionalDesc(null));
-            check(CheckDefaultDesc(EchoOptionalDesc(new TestDesc())));
-            throwsType(IllegalArgumentException.class, () -> CheckDefaultDesc(null));
+            check(CheckNestedDefaultDesc(EchoOptionalDesc(new TestDesc())));
+            throwsType(IllegalArgumentException.class, () -> CheckNestedDefaultDesc(null));
         });
         run("Descriptors.InvalidNestedFields", () -> {
             TestDesc desc = new TestDesc();

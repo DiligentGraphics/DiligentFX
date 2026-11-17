@@ -25,7 +25,7 @@
  */
 
 #pragma once
-#include "Scalars.h"
+#include "TestScalars.h"
 
 DILIGENT_BEGIN_NAMESPACE(Diligent)
 // clang-format off

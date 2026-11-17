@@ -35,9 +35,9 @@ public final class ScalarsTest {
         });
         run("Scalars.EnumsAndStatuses", () -> {
             equal((short) 241, TEST_MODE.TEST_MODE_LAST);
-            equal(TEST_MODE.TEST_MODE_LAST, EchoMode(TEST_MODE.TEST_MODE_LAST));
-            equal(TEST_STATUS.TEST_STATUS_FAILED, EchoStatus(TEST_STATUS.TEST_STATUS_FAILED));
-            equal(TEST_STATUS.TEST_STATUS_PENDING, EchoStatus(TEST_STATUS.TEST_STATUS_PENDING));
+            equal(TEST_MODE.TEST_MODE_LAST, EchoTestMode(TEST_MODE.TEST_MODE_LAST));
+            equal(TEST_STATUS.TEST_STATUS_FAILED, EchoTestStatus(TEST_STATUS.TEST_STATUS_FAILED));
+            equal(TEST_STATUS.TEST_STATUS_PENDING, EchoTestStatus(TEST_STATUS.TEST_STATUS_PENDING));
         });
         run("Scalars.RangeChecksBeforeNativeCall", () -> {
             long calls = GetCallCount();
@@ -47,7 +47,7 @@ public final class ScalarsTest {
             throwsType(IllegalArgumentException.class, () -> EchoUint16(65536));
             throwsType(IllegalArgumentException.class, () -> EchoUint32(-1));
             throwsType(IllegalArgumentException.class, () -> EchoUint32(0x100000000L));
-            throwsType(IllegalArgumentException.class, () -> EchoMode((short) 256));
+            throwsType(IllegalArgumentException.class, () -> EchoTestMode((short) 256));
         });
         run("Scalars.NativeExceptionBoundary", () -> {
             throwsType(RuntimeException.class, BindingTests::ThrowNative);

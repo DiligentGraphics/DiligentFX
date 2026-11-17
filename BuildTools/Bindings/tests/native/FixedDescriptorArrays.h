@@ -25,7 +25,7 @@
  */
 
 #pragma once
-#include "Scalars.h"
+#include "TestScalars.h"
 
 DILIGENT_BEGIN_NAMESPACE(Diligent)
 // clang-format off
@@ -100,11 +100,11 @@ Bool DILIGENT_GLOBAL_FUNCTION(CheckLargeDescriptorArray)(const TestLargeDescript
 const TestLargeDescriptorArray REF DILIGENT_GLOBAL_FUNCTION(EchoLargeDescriptorArray)(const TestLargeDescriptorArray REF Desc);
 Bool DILIGENT_GLOBAL_FUNCTION(CheckLargeFixedInput)(const TestLargeFixedArray REF Desc);
 const TestLargeFixedArray REF DILIGENT_GLOBAL_FUNCTION(EchoLargeFixedArray)(const TestLargeFixedArray REF Desc);
-Bool DILIGENT_GLOBAL_FUNCTION(CheckFixedInputs)(const TestFixedArrays REF Desc);
+Bool DILIGENT_GLOBAL_FUNCTION(CheckFixedDescriptorInputs)(const TestFixedArrays REF Desc);
 void DILIGENT_GLOBAL_FUNCTION(CopyFixedArrays)(const TestFixedArrays REF Desc, TestFixedArrays REF Result);
-const TestFixedArrays REF DILIGENT_GLOBAL_FUNCTION(EchoFixedArrays)(const TestFixedArrays REF Desc);
+const TestFixedArrays REF DILIGENT_GLOBAL_FUNCTION(EchoFixedDescriptorArrays)(const TestFixedArrays REF Desc);
 const TestFixedArrays REF DILIGENT_GLOBAL_FUNCTION(GetIncompleteFixedArrays)();
-Uint32 DILIGENT_GLOBAL_FUNCTION(GetFixedCallCount)();
+Uint32 DILIGENT_GLOBAL_FUNCTION(GetFixedDescriptorCallCount)();
 #include "UndefRefMacro.h"
 // clang-format on
 DILIGENT_END_NAMESPACE

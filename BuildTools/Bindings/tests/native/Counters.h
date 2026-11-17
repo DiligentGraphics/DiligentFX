@@ -25,7 +25,7 @@
  */
 
 #pragma once
-#include "Scalars.h"
+#include "TestScalars.h"
 #include "Object.h"
 
 DILIGENT_BEGIN_NAMESPACE(Diligent)

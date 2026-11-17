@@ -44,10 +44,10 @@ class GenerationTest(unittest.TestCase):
     def test_fixed_arguments_share_adapter_configuration(self):
         java, cpp = generate(self.model, adapters={
             "schema_version": 1,
-            "fixed_arguments": {"Diligent::EchoMode": {"Value": "Diligent::TEST_MODE_LAST"}},
+            "fixed_arguments": {"Diligent::EchoTestMode": {"Value": "Diligent::TEST_MODE_LAST"}},
         })
-        self.assertIn("EchoMode()", java)
-        self.assertIn("Diligent::EchoMode(Diligent::TEST_MODE_LAST)", cpp)
+        self.assertIn("EchoTestMode()", java)
+        self.assertIn("Diligent::EchoTestMode(Diligent::TEST_MODE_LAST)", cpp)
 
     def test_rejects_unbounded_numeric_pointer(self):
         declaration(self.model, "SumValues")["parameters"][0]["policy"].pop("length")

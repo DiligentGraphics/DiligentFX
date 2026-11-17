@@ -24,32 +24,8 @@
  *  of the possibility of such damages.
  */
 
-#include "Scalars.h"
-#include <stdexcept>
-
-namespace Diligent
-{
-namespace
-{
-Uint32 Calls = 0;
-}
-Int8  EchoInt8(Int8 Value) { return Value; }
-Uint8 EchoUint8(Uint8 Value)
-{
-    ++Calls;
-    return Value;
-}
-Int16       EchoInt16(Int16 Value) { return Value; }
-Uint16      EchoUint16(Uint16 Value) { return Value; }
-Int32       EchoInt32(Int32 Value) { return Value; }
-Uint32      EchoUint32(Uint32 Value) { return Value; }
-Int64       EchoInt64(Int64 Value) { return Value; }
-Uint64      EchoUint64(Uint64 Value) { return Value; }
-Float32     EchoFloat(Float32 Value) { return Value; }
-Float64     EchoDouble(Float64 Value) { return Value; }
-Bool        InvertBool(Bool Value) { return !Value; }
-TEST_MODE   EchoMode(TEST_MODE Value) { return Value; }
-TEST_STATUS EchoStatus(TEST_STATUS Value) { return Value; }
-Uint32      GetCallCount() { return Calls; }
-void        ThrowNative() { throw std::runtime_error{"Fixture failure"}; }
-} // namespace Diligent
+#pragma once
+#include "BasicTypes.h"
+DILIGENT_BEGIN_NAMESPACE(Diligent)
+void DILIGENT_GLOBAL_FUNCTION(ThrowNative)();
+DILIGENT_END_NAMESPACE

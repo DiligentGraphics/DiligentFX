@@ -28,7 +28,7 @@
 
 #include <array>
 #include <string>
-#include <emscripten/heap.h>
+#include "MemoryTestHooks.hpp"
 
 namespace Diligent
 {
@@ -69,7 +69,7 @@ public:
         ++LiveArraySnapshots;
     }
 
-    void QueryInterface(const INTERFACE_ID& IID, IObject** ppObject) override
+    void DILIGENT_CALL_TYPE QueryInterface(const INTERFACE_ID& IID, IObject** ppObject) override
     {
         *ppObject = nullptr;
         if (IID == IID_Unknown || IID == IID_MarshalArraySnapshots)
@@ -78,40 +78,40 @@ public:
             AddRef();
         }
     }
-    ReferenceCounterValueType AddRef() override { return ++m_Refs; }
-    ReferenceCounterValueType Release() override
+    ReferenceCounterValueType DILIGENT_CALL_TYPE AddRef() override { return ++m_Refs; }
+    ReferenceCounterValueType DILIGENT_CALL_TYPE Release() override
     {
         const Uint32 Count = --m_Refs;
         if (Count == 0)
             delete this;
         return Count;
     }
-    IReferenceCounters* GetReferenceCounters() const override { return nullptr; }
+    IReferenceCounters* DILIGENT_CALL_TYPE GetReferenceCounters() const override { return nullptr; }
 
-    const MarshalOutputArrayDesc& GetDesc() const override { return m_Desc; }
-    const MarshalOutputArrayDesc& GetDescAfterGrowingMemory() const override
+    const MarshalOutputArrayDesc& DILIGENT_CALL_TYPE GetDesc() const override { return m_Desc; }
+    const MarshalOutputArrayDesc& DILIGENT_CALL_TYPE GetDescAfterGrowingMemory() const override
     {
-        emscripten_resize_heap(emscripten_get_heap_size() + 65536);
+        GrowTestHeap();
         return m_Desc;
     }
-    const Float32* GetValues(Uint32 Count) const override
+    const Float32* DILIGENT_CALL_TYPE GetValues(Uint32 Count) const override
     {
         return Count <= m_Float32.size() ? m_Float32.data() : nullptr;
     }
-    const MarshalOutputArrayItem* GetItems(Uint32 Count) const override
+    const MarshalOutputArrayItem* DILIGENT_CALL_TYPE GetItems(Uint32 Count) const override
     {
         return Count != 0 && Count <= m_Items.size() ? m_Items.data() : nullptr;
     }
-    Uint64 GetValueCount() const override
+    Uint64 DILIGENT_CALL_TYPE GetValueCount() const override
     {
-        emscripten_resize_heap(emscripten_get_heap_size() + 65536);
+        GrowTestHeap();
         return m_ValueCount;
     }
-    Uint32                        GetItemCount() const override { return static_cast<Uint32>(m_Items.size()); }
-    const Float32*                GetAllValues() const override { return m_ValueCount ? m_Float32.data() : nullptr; }
-    const MarshalOutputArrayItem* GetAllItems() const override { return m_Items.data(); }
-    void                          SetValueCount(Uint64 Count) override { m_ValueCount = Count; }
-    void                          Update() override
+    Uint32 DILIGENT_CALL_TYPE                        GetItemCount() const override { return static_cast<Uint32>(m_Items.size()); }
+    const Float32* DILIGENT_CALL_TYPE                GetAllValues() const override { return m_ValueCount ? m_Float32.data() : nullptr; }
+    const MarshalOutputArrayItem* DILIGENT_CALL_TYPE GetAllItems() const override { return m_Items.data(); }
+    void DILIGENT_CALL_TYPE                          SetValueCount(Uint64 Count) override { m_ValueCount = Count; }
+    void DILIGENT_CALL_TYPE                          Update() override
     {
         m_Float32[1]                 = 64.f;
         m_Items[0].Id                = 99;
@@ -180,16 +180,16 @@ const MarshalArrayRoundTrip& GetInvalidOutputArray(Uint32 Case)
     {
         case 0: Result.pValues = nullptr; break;
         case 1: Result.ValueCount = Uint64{1} << 32; break;
-        case 2: Result.pValues = reinterpret_cast<const Float64*>(emscripten_get_heap_size()); break;
+        case 2: Result.pValues = reinterpret_cast<const Float64*>(GetTestHeapSize()); break;
         case 3: Result.pValues = reinterpret_cast<const Float64*>(reinterpret_cast<const Uint8*>(Values) + 1); break;
-        case 4: Result.ValueCount = emscripten_get_heap_size() / sizeof(Float64) + 1; break;
+        case 4: Result.ValueCount = GetTestHeapSize() / sizeof(Float64) + 1; break;
         case 5:
-            Result.pItems    = reinterpret_cast<const MarshalOutputArrayItem*>(emscripten_get_heap_size());
+            Result.pItems    = reinterpret_cast<const MarshalOutputArrayItem*>(GetTestHeapSize());
             Result.ItemCount = 1;
             break;
         case 6:
             Result.pItems    = reinterpret_cast<const MarshalOutputArrayItem*>(Values);
-            Result.ItemCount = static_cast<Uint32>(emscripten_get_heap_size() / sizeof(MarshalOutputArrayItem) + 1);
+            Result.ItemCount = static_cast<Uint32>(GetTestHeapSize() / sizeof(MarshalOutputArrayItem) + 1);
             break;
         case 7:
             Result.pItems    = reinterpret_cast<const MarshalOutputArrayItem*>(reinterpret_cast<const Uint8*>(Values) + 1);

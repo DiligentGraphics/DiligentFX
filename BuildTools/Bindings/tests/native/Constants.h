@@ -25,7 +25,7 @@
  */
 
 #pragma once
-#include "Scalars.h"
+#include "TestScalars.h"
 #include <float.h>
 #include <math.h>
 
@@ -60,7 +60,7 @@ static DILIGENT_CONSTEXPR Float64 TestConstantNegativeInfinity = -INFINITY;
 static DILIGENT_CONSTEXPR Float32 TestConstantNotANumber = NAN;
 
 // Constructing this snapshot reads the constants through the native compiler,
-// independently of the Java literals emitted from Clang's extracted values.
+// independently of the binding literals emitted from Clang's extracted values.
 struct TestConstantSnapshot
 {
     Int8 SignedByte DEFAULT_INITIALIZER(TestConstantSignedByte);
@@ -89,5 +89,8 @@ struct TestConstantSnapshot
     Float32 NotANumber DEFAULT_INITIALIZER(TestConstantNotANumber);
 };
 typedef struct TestConstantSnapshot TestConstantSnapshot;
+#include "DefineRefMacro.h"
+const TestConstantSnapshot REF DILIGENT_GLOBAL_FUNCTION(GetConstantSnapshot)();
+#include "UndefRefMacro.h"
 // clang-format on
 DILIGENT_END_NAMESPACE

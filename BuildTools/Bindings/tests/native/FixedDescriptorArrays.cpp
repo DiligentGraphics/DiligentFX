@@ -24,7 +24,7 @@
  *  of the possibility of such damages.
  */
 
-#include "FixedArrays.h"
+#include "FixedDescriptorArrays.h"
 #include <cstring>
 
 namespace Diligent
@@ -34,7 +34,7 @@ namespace
 Uint32 FixedCallCount = 0;
 }
 
-Bool CheckFixedInputs(const TestFixedArrays& Desc)
+Bool CheckFixedDescriptorInputs(const TestFixedArrays& Desc)
 {
     ++FixedCallCount;
     return Desc.Matrix[13] == 42.25f && Desc.Rows[1][3] == -7.5f && Desc.Cube[1][0][1] == 27 &&
@@ -59,7 +59,7 @@ void CopyFixedArrays(const TestFixedArrays& Desc, TestFixedArrays& Result)
     Result = Desc;
 }
 
-const TestFixedArrays& EchoFixedArrays(const TestFixedArrays& Desc)
+const TestFixedArrays& EchoFixedDescriptorArrays(const TestFixedArrays& Desc)
 {
     ++FixedCallCount;
     return Desc;
@@ -116,5 +116,5 @@ const TestLargeArrayPacket& EchoLargeArrayPacket(const TestLargeArrayPacket& Des
     return Desc;
 }
 
-Uint32 GetFixedCallCount() { return FixedCallCount; }
+Uint32 GetFixedDescriptorCallCount() { return FixedCallCount; }
 } // namespace Diligent

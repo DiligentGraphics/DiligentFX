@@ -27,7 +27,7 @@
 #include "StructResults.h"
 
 #include <string>
-#include <emscripten/heap.h>
+#include "MemoryTestHooks.hpp"
 
 namespace Diligent
 {
@@ -48,7 +48,7 @@ public:
         ++LiveSnapshotCount;
     }
 
-    void QueryInterface(const INTERFACE_ID& IID, IObject** ppObject) override
+    void DILIGENT_CALL_TYPE QueryInterface(const INTERFACE_ID& IID, IObject** ppObject) override
     {
         *ppObject = nullptr;
         if (IID == IID_Unknown || IID == IID_MarshalSnapshots)
@@ -57,23 +57,23 @@ public:
             AddRef();
         }
     }
-    ReferenceCounterValueType AddRef() override { return ++m_Refs; }
-    ReferenceCounterValueType Release() override
+    ReferenceCounterValueType DILIGENT_CALL_TYPE AddRef() override { return ++m_Refs; }
+    ReferenceCounterValueType DILIGENT_CALL_TYPE Release() override
     {
         const Uint32 Count = --m_Refs;
         if (Count == 0)
             delete this;
         return Count;
     }
-    IReferenceCounters* GetReferenceCounters() const override { return nullptr; }
+    IReferenceCounters* DILIGENT_CALL_TYPE GetReferenceCounters() const override { return nullptr; }
 
-    const MarshalSnapshotDesc& GetDesc() const override { return m_Desc; }
-    const MarshalSnapshotDesc& GetDescAfterGrowingMemory() const override
+    const MarshalSnapshotDesc& DILIGENT_CALL_TYPE GetDesc() const override { return m_Desc; }
+    const MarshalSnapshotDesc& DILIGENT_CALL_TYPE GetDescAfterGrowingMemory() const override
     {
-        emscripten_resize_heap(emscripten_get_heap_size() + 65536);
+        GrowTestHeap();
         return m_Desc;
     }
-    void Update(Int32 Count, const Char* Name, const Char* Label) override
+    void DILIGENT_CALL_TYPE Update(Int32 Count, const Char* Name, const Char* Label) override
     {
         m_Name                = Name != nullptr ? Name : "";
         m_Label               = Label != nullptr ? Label : "";

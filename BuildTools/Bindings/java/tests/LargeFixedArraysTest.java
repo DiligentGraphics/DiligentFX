@@ -34,9 +34,9 @@ public final class LargeFixedArraysTest {
         run("LargeFixedArrays.ValidateFinalChunkBeforeNativeCall", () -> {
             TestLargeFixedArray desc = new TestLargeFixedArray();
             desc.Pixels[desc.Pixels.length - 1] = 256;
-            long calls = GetFixedCallCount();
+            long calls = GetFixedDescriptorCallCount();
             throwsType(IllegalArgumentException.class, () -> CheckLargeFixedInput(desc));
-            equal(calls, GetFixedCallCount());
+            equal(calls, GetFixedDescriptorCallCount());
         });
         run("LargeFixedArrays.DescriptorDefaults", () -> {
             TestLargeDescriptorArray desc = new TestLargeDescriptorArray();
@@ -62,11 +62,11 @@ public final class LargeFixedArraysTest {
             TestLargeDescriptorArray desc = new TestLargeDescriptorArray();
             int last = desc.Pixels.length - 1;
             desc.Pixels[last].Value = 0x100000000L;
-            long calls = GetFixedCallCount();
+            long calls = GetFixedDescriptorCallCount();
             throwsType(IllegalArgumentException.class, () -> CheckLargeDescriptorArray(desc));
             desc.Pixels[last] = null;
             throwsType(IllegalArgumentException.class, () -> CheckLargeDescriptorArray(desc));
-            equal(calls, GetFixedCallCount());
+            equal(calls, GetFixedDescriptorCallCount());
         });
         run("LargeFixedArrays.NestedDescriptorDefaults", () -> {
             TestLargeArrayPacket desc = new TestLargeArrayPacket();
@@ -91,11 +91,11 @@ public final class LargeFixedArraysTest {
         run("LargeFixedArrays.NestedDescriptorValidationBeforeNativeCall", () -> {
             TestLargeArrayPacket desc = new TestLargeArrayPacket();
             desc.Image.Pixels[desc.Image.Pixels.length - 1].Value = 0x100000000L;
-            long calls = GetFixedCallCount();
+            long calls = GetFixedDescriptorCallCount();
             throwsType(IllegalArgumentException.class, () -> CheckLargeArrayPacket(desc));
             desc.Image = null;
             throwsType(IllegalArgumentException.class, () -> CheckLargeArrayPacket(desc));
-            equal(calls, GetFixedCallCount());
+            equal(calls, GetFixedDescriptorCallCount());
         });
     }
 }

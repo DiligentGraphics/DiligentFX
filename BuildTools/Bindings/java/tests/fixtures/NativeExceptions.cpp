@@ -24,35 +24,9 @@
  *  of the possibility of such damages.
  */
 
-#include "Descriptors.h"
-#include <cstring>
-
+#include "NativeExceptions.h"
+#include <stdexcept>
 namespace Diligent
 {
-Bool CheckDefaultDesc(const TestDesc& Desc)
-{
-    return Desc.Size == 0xFEDCBA9876543210ull && Desc.Count == -13 && Desc.Enabled &&
-        Desc.Mode == TEST_MODE_LAST && Desc.Position.X == 1.25f && Desc.Position.Y == -2.5 &&
-        Desc.Name && std::strcmp(Desc.Name, "default") == 0 && !Desc.Label;
-}
-TEST_STATUS CopyDesc(const TestDesc& Desc, TestDesc& Result)
-{
-    Result = Desc;
-    return TEST_STATUS_PENDING;
-}
-void CopyDescPointer(const TestDesc& Desc, TestDesc* pResult) { *pResult = Desc; }
-void MakeOutputs(Uint32 Seed, Uint64& Value, TestVector& Vector)
-{
-    Value    = 0xFEDCBA9800000000ull | Seed;
-    Vector.X = static_cast<float>(Seed) + 0.5f;
-    Vector.Y = -3.25;
-}
-TEST_STATUS               FailedOutput(Uint32&) { return TEST_STATUS_FAILED; }
-const TestDesc*           EchoOptionalDesc(const TestDesc* pDesc) { return pDesc; }
-const Char*               ReadRequiredName(const RequiredNestedDesc& Desc) { return Desc.Inner.Name; }
-const RequiredNestedDesc& GetIncompleteDesc()
-{
-    static const RequiredNestedDesc Desc;
-    return Desc;
-}
+void ThrowNative() { throw std::runtime_error{"Fixture failure"}; }
 } // namespace Diligent

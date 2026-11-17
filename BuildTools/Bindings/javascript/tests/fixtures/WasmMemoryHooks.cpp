@@ -24,14 +24,17 @@
  *  of the possibility of such damages.
  */
 
-#include "StringMarshalling.h"
-#include <cstring>
-
+#include "MemoryTestHooks.hpp"
+#include <emscripten/heap.h>
 namespace Diligent
 {
-const Char* EchoText(const Char* Text) { return Text; }
-const Char* EchoOptionalText(const Char* Text) { return Text; }
-Uint32      TextByteCount(const Char* Text) { return static_cast<Uint32>(std::strlen(Text)); }
-Bool        CheckUTF8(const Char* Text) { return std::strcmp(Text, "A\xC3\xA9\xF0\x9F\x98\x80") == 0; }
-const Char* GetInvalidText() { return "\xC0\xAF"; }
+namespace
+{
+Uint64     GetWasmHeapSize() { return emscripten_get_heap_size(); }
+Bool       GrowWasmHeap() { return emscripten_resize_heap(emscripten_get_heap_size() + 65536) != 0; }
+const bool MemoryHooksInstalled = [] {
+    SetMemoryTestHooks({GetWasmHeapSize, GrowWasmHeap});
+    return true;
+}();
+} // namespace
 } // namespace Diligent

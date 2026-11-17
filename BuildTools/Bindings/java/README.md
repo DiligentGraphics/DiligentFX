@@ -2,7 +2,10 @@
 
 This backend consumes the shared binding model and generates a Java API and JNI
 C++ glue. It has no Radient dependency. The standalone conformance project uses
-small native fixtures declared with the real Diligent API macros.
+the [shared native fixtures](../tests/native/README.md), declared with the real
+Diligent API macros. Its `tests/API.json` selects supported APIs from that common
+reference. Java assertions stay in `tests/`; runtime-name collision and native
+exception fixtures stay in `tests/fixtures/`.
 
 Generated sources are build artifacts. `generate.py` accepts `--model`, `--module`,
 `--package`, `--library`, one or more `--header` arguments, and `--output`.

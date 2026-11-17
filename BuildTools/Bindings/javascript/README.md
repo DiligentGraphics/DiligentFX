@@ -5,9 +5,11 @@ declarations from the validated binding model. It does not import Clang or chang
 the public native API. Native code initializes descriptors and dispatches interface
 calls; JavaScript does not depend on struct offsets or vtable layout.
 
-The standalone test project uses small native test implementations, not Radient.
-The fixtures use real Diligent declarations and macros and compile as both C and
-C++. Tests run through generated JavaScript into the compiled Wasm module in Node.
+The standalone test project uses the [shared native fixtures](../tests/native/README.md),
+not Radient. The fixture headers use real Diligent declarations and macros and
+are checked as both C and C++. Its `tests/API.json` selects supported APIs from
+that common reference. Wasm memory hooks and virtual-file fixtures stay in
+`tests/fixtures/`. Tests run through generated JavaScript into the compiled Wasm module in Node.
 The descriptor, array, ownership, output-parameter, constant, and default-argument
 suites also run in a headless browser.
 No renderer or GPU is required.
@@ -48,7 +50,8 @@ of this optional Emscripten project.
 
 Fixture sources and test suites are discovered automatically:
 
-- `tests/fixtures/*.c` and `*.cpp` are compiled into `BindingTestsWasm`.
+- `../tests/native/*.cpp` and local `tests/fixtures/*.c` and `*.cpp` are compiled
+  into `BindingTestsWasm`.
 - `tests/test_*.py` run with the generated model path and `-v`.
 - `tests/test_*.mjs` run in Node with the generated module path.
 - `tests/*_tests.mjs` run through the browser runner as shared suites.

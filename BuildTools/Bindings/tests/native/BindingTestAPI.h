@@ -24,37 +24,32 @@
  *  of the possibility of such damages.
  */
 
+#pragma once
+
+#include "Arrays.h"
+#include "BorrowedInterfaces.h"
+#include "Buffers.h"
+#include "ComputedOutputs.h"
+#include "Constants.h"
+#include "Counters.h"
+#include "DefaultArguments.h"
+#include "Descriptors.h"
+#include "Exports.h"
+#include "FixedArrays.h"
+#include "FixedDescriptorArrays.h"
+#include "InheritedDescriptors.h"
+#include "InputArrays.h"
+#include "InterfaceFields.h"
+#include "InterfaceReferences.h"
+#include "Interfaces.h"
+#include "NestedStructs.h"
+#include "OutputArrays.h"
+#include "OutputBuffers.h"
 #include "OutputParameters.h"
-#include <emscripten/heap.h>
-
-namespace Diligent
-{
-
-MARSHAL_STATUS ReadReferenceOutput(MARSHAL_STATUS Status, Uint64& Value)
-{
-    if (Status != MARSHAL_STATUS_FAILED)
-        Value = 0xfedcba9876543210ull;
-    return Status;
-}
-MARSHAL_STATUS ReadRecordOutput(Bool Write, Bool Grow, Bool InvalidText, MarshalOutputRecord& Value)
-{
-    if (Grow)
-        emscripten_resize_heap(emscripten_get_heap_size() + 65536);
-    if (Write)
-    {
-        Value.Value   = 0xfedcba9876543210ull;
-        Value.Data[1] = 2.5f;
-        Value.Label   = "native output";
-    }
-    static constexpr Char Invalid[] = {static_cast<Char>(0xc3), 'x', 0};
-    if (InvalidText)
-        Value.Label = Invalid;
-    return Write ? MARSHAL_STATUS_PENDING : MARSHAL_STATUS_FAILED;
-}
-void MakeRecordOutput(MarshalOutputRecord* pValue)
-{
-    pValue->Value   = 42;
-    pValue->Data[2] = -3;
-}
-
-} // namespace Diligent
+#include "Scalars.h"
+#include "StringMarshalling.h"
+#include "StructPointers.h"
+#include "StructResults.h"
+#include "Structs.h"
+#include "TestScalars.h"
+#include "Text.h"

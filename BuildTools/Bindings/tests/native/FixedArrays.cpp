@@ -27,7 +27,7 @@
 #include "FixedArrays.h"
 
 #include <cstddef>
-#include <emscripten/heap.h>
+#include "MemoryTestHooks.hpp"
 
 namespace Diligent
 {
@@ -152,7 +152,7 @@ const MarshalFixedArrays& GetFixedArrays(Bool GrowMemory)
 {
     ++FixedCallCount;
     if (GrowMemory)
-        emscripten_resize_heap(emscripten_get_heap_size() + 65536);
+        GrowTestHeap();
     return Arrays;
 }
 const MarshalFixedReadOnly& GetFixedReadOnlyArrays()

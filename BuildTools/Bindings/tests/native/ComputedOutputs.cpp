@@ -26,7 +26,7 @@
 
 #include "ComputedOutputs.h"
 
-#include <emscripten/heap.h>
+#include "MemoryTestHooks.hpp"
 
 namespace Diligent
 {
@@ -44,7 +44,7 @@ public:
         ++LiveComputedOutputs;
     }
 
-    void QueryInterface(const INTERFACE_ID& IID, IObject** ppObject) override
+    void DILIGENT_CALL_TYPE QueryInterface(const INTERFACE_ID& IID, IObject** ppObject) override
     {
         *ppObject = nullptr;
         if (IID == IID_Unknown || IID == IID_MarshalComputedOutputs)
@@ -53,25 +53,25 @@ public:
             AddRef();
         }
     }
-    ReferenceCounterValueType AddRef() override { return ++m_Refs; }
-    ReferenceCounterValueType Release() override
+    ReferenceCounterValueType DILIGENT_CALL_TYPE AddRef() override { return ++m_Refs; }
+    ReferenceCounterValueType DILIGENT_CALL_TYPE Release() override
     {
         const Uint32 Count = --m_Refs;
         if (Count == 0)
             delete this;
         return Count;
     }
-    IReferenceCounters*        GetReferenceCounters() const override { return nullptr; }
-    const MarshalComputedDesc& GetDesc() const override { return m_Desc; }
-    Uint64                     GetValueCount() const override { return m_Desc.Count; }
-    void                       SetCount(Uint64 Count) override { m_Desc.Count = Count; }
+    IReferenceCounters* DILIGENT_CALL_TYPE        GetReferenceCounters() const override { return nullptr; }
+    const MarshalComputedDesc& DILIGENT_CALL_TYPE GetDesc() const override { return m_Desc; }
+    Uint64 DILIGENT_CALL_TYPE                     GetValueCount() const override { return m_Desc.Count; }
+    void DILIGENT_CALL_TYPE                       SetCount(Uint64 Count) override { m_Desc.Count = Count; }
 
-    MARSHAL_STATUS FillMatrices(IMarshalComputedOutputs* pSource, MarshalComputedMatrix* pMatrices, Bool Fail, Bool Grow) override
+    MARSHAL_STATUS DILIGENT_CALL_TYPE FillMatrices(IMarshalComputedOutputs* pSource, MarshalComputedMatrix* pMatrices, Bool Fail, Bool Grow) override
     {
         if (Fail)
             return MARSHAL_STATUS_FAILED;
         if (Grow)
-            emscripten_resize_heap(emscripten_get_heap_size() + 65536);
+            GrowTestHeap();
         const Uint64 Count = pSource->GetDesc().Count;
         for (Uint64 i = 0; i < Count; ++i)
         {

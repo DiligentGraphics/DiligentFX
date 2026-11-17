@@ -24,7 +24,7 @@
  *  of the possibility of such damages.
  */
 
-#include "Interfaces.h"
+#include "Counters.h"
 #include <atomic>
 
 namespace Diligent
@@ -36,7 +36,7 @@ class TestCounter final : public ITestCounter
 {
 public:
     explicit TestCounter(Uint64 Value) : m_Value{Value} { ++LiveCounters; }
-    void DILIGENT_CALL_TYPE                      QueryInterface(const INTERFACE_ID&, IObject** ppObject) override { *ppObject = nullptr; }
+    void DILIGENT_CALL_TYPE DILIGENT_CALL_TYPE   QueryInterface(const INTERFACE_ID&, IObject** ppObject) override { *ppObject = nullptr; }
     ReferenceCounterValueType DILIGENT_CALL_TYPE AddRef() override { return ++m_References; }
     ReferenceCounterValueType DILIGENT_CALL_TYPE Release() override
     {
@@ -45,10 +45,10 @@ public:
             delete this;
         return Count;
     }
-    IReferenceCounters* DILIGENT_CALL_TYPE GetReferenceCounters() const override { return nullptr; }
-    Uint64 DILIGENT_CALL_TYPE              GetValue() const override { return m_Value; }
-    void DILIGENT_CALL_TYPE                SetValue(Uint64 Value) override { m_Value = Value; }
-    Uint32 DILIGENT_CALL_TYPE              GetRefCount() const override { return m_References; }
+    IReferenceCounters* DILIGENT_CALL_TYPE       GetReferenceCounters() const override { return nullptr; }
+    Uint64 DILIGENT_CALL_TYPE DILIGENT_CALL_TYPE GetValue() const override { return m_Value; }
+    void DILIGENT_CALL_TYPE DILIGENT_CALL_TYPE   SetValue(Uint64 Value) override { m_Value = Value; }
+    Uint32 DILIGENT_CALL_TYPE DILIGENT_CALL_TYPE GetRefCount() const override { return m_References; }
 
 private:
     ~TestCounter() { --LiveCounters; }

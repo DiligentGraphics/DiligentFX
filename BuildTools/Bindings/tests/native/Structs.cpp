@@ -24,38 +24,18 @@
  *  of the possibility of such damages.
  */
 
-#pragma once
-#include "BasicTypes.h"
+#include "Structs.h"
 
-DILIGENT_BEGIN_NAMESPACE(Diligent)
-
-// clang-format off
-DILIGENT_TYPED_ENUM(TEST_STATUS, Int32)
+namespace Diligent
 {
-    TEST_STATUS_FAILED = -1,
-    TEST_STATUS_OK = 0,
-    TEST_STATUS_PENDING = 3
-};
-DILIGENT_TYPED_ENUM(TEST_MODE, Uint8)
+Bool CheckDefaultDesc(const MarshalDesc& Desc)
 {
-    TEST_MODE_FIRST = 0,
-    TEST_MODE_LAST = 241
-};
-
-Int8 DILIGENT_GLOBAL_FUNCTION(EchoInt8)(Int8 Value);
-Uint8 DILIGENT_GLOBAL_FUNCTION(EchoUint8)(Uint8 Value);
-Int16 DILIGENT_GLOBAL_FUNCTION(EchoInt16)(Int16 Value);
-Uint16 DILIGENT_GLOBAL_FUNCTION(EchoUint16)(Uint16 Value);
-Int32 DILIGENT_GLOBAL_FUNCTION(EchoInt32)(Int32 Value);
-Uint32 DILIGENT_GLOBAL_FUNCTION(EchoUint32)(Uint32 Value);
-Int64 DILIGENT_GLOBAL_FUNCTION(EchoInt64)(Int64 Value);
-Uint64 DILIGENT_GLOBAL_FUNCTION(EchoUint64)(Uint64 Value);
-Float32 DILIGENT_GLOBAL_FUNCTION(EchoFloat)(Float32 Value);
-Float64 DILIGENT_GLOBAL_FUNCTION(EchoDouble)(Float64 Value);
-Bool DILIGENT_GLOBAL_FUNCTION(InvertBool)(Bool Value);
-TEST_MODE DILIGENT_GLOBAL_FUNCTION(EchoMode)(TEST_MODE Value);
-TEST_STATUS DILIGENT_GLOBAL_FUNCTION(EchoStatus)(TEST_STATUS Value);
-Uint32 DILIGENT_GLOBAL_FUNCTION(GetCallCount)();
-void DILIGENT_GLOBAL_FUNCTION(ThrowNative)();
-// clang-format on
-DILIGENT_END_NAMESPACE
+    return Desc.Size == 0xFEDCBA9876543210ull && Desc.Count == -13 && Desc.Scale == 1.25f &&
+        Desc.Weight == -2.5 && Desc.Enabled && Desc.Mode == MARSHAL_MODE_LAST;
+}
+Bool CheckCustomDesc(const MarshalDesc& Desc)
+{
+    return Desc.Size == 0x123456789ABCDEF0ull && Desc.Count == 19 && Desc.Scale == -3.5f &&
+        Desc.Weight == 0.125 && !Desc.Enabled && Desc.Mode == MARSHAL_MODE_FIRST;
+}
+} // namespace Diligent
