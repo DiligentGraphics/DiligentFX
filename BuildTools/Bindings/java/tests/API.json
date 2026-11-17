@@ -18,6 +18,7 @@
       "java/tests/fixtures/*.h"
     ],
     "include": [
+      "Diligent::IMarshalDerivedBytes",
       "Diligent::GetComputedOutputQueryCount",
       "Diligent::GetComputedOutputCallCount",
       "Diligent::ReadStructPointer",
@@ -86,7 +87,8 @@
       "Diligent::ChecksumBytes",
       "Diligent::CheckBytes",
       "Diligent::CreateMarshalBytes",
-      "Diligent::GetLiveBufferCount"
+      "Diligent::GetLiveBufferCount",
+      "Diligent::GetBufferReleaseCount"
     ]
   },
   "declarations": {
@@ -136,7 +138,14 @@
         "GetData",
         "Resize",
         "RefCount",
-        "SetReportedSize"
+        "SetReportedSize",
+        "MapRead",
+        "MapWrite",
+        "UnmapWrite",
+        "ReaderCount",
+        "IsWriting",
+        "SetReleaseStatus",
+        "UnmapRead"
       ]
     }
   }

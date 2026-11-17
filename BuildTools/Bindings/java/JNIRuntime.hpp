@@ -382,6 +382,65 @@ private:
     std::vector<Entry> m_Entries;
 };
 
+// A successful acquisition owns one interface reference until explicit release.
+// Before publication to Java, destruction rolls back acquisition on any failure.
+// Java scope methods synchronize access and close on the same object monitor.
+class ByteScope
+{
+public:
+    ByteScope(void* Owner, std::int32_t (*End)(void*), void (*DropOwner)(void*), bool CanWrite) :
+        Writable{CanWrite}, m_Owner{Owner}, m_End{End}, m_DropOwner{DropOwner}
+    {}
+    ~ByteScope()
+    {
+        if (Acquired)
+        {
+            // Preserve the original conversion exception during rollback.
+            try
+            {
+                Release();
+            }
+            catch (...)
+            {}
+        }
+        m_DropOwner(m_Owner);
+    }
+    ByteScope(const ByteScope&)            = delete;
+    ByteScope& operator=(const ByteScope&) = delete;
+
+    void SetData(JNIEnv* Env, const void* Pointer, std::uint64_t ByteCount)
+    {
+        const std::uintptr_t Address = reinterpret_cast<std::uintptr_t>(Pointer);
+        Require(Env, ByteCount <= static_cast<std::uint64_t>((std::numeric_limits<jlong>::max)()) &&
+                    ByteCount <= (std::numeric_limits<std::uintptr_t>::max)() - Address,
+                "Byte scope size is not representable");
+        Require(Env, Pointer != nullptr || ByteCount == 0, "Nonempty byte scope has null storage");
+        Data = static_cast<const unsigned char*>(Pointer);
+        Size = static_cast<size_t>(ByteCount);
+    }
+    void CheckRange(JNIEnv* Env, jlong Offset, size_t Count) const
+    {
+        Require(Env, Offset >= 0 && static_cast<std::uint64_t>(Offset) <= Size &&
+                    Count <= Size - static_cast<size_t>(Offset), "Byte scope range is out of bounds");
+    }
+    std::int32_t Release()
+    {
+        // Release consumes access even if the native method reports an error.
+        Acquired = false;
+        return m_End(m_Owner);
+    }
+
+    const unsigned char* Data     = nullptr;
+    size_t               Size     = 0;
+    bool                 Acquired = false;
+    const bool           Writable;
+
+private:
+    void* m_Owner;
+    std::int32_t (*m_End)(void*);
+    void (*m_DropOwner)(void*);
+};
+
 inline jsize ArrayCount(JNIEnv* Env, std::uint64_t Count)
 {
     Require(Env, Count <= static_cast<std::uint64_t>((std::numeric_limits<jsize>::max)()), "Array count is too large for Java");

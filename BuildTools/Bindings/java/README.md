@@ -60,8 +60,8 @@ empty native storage in that case. Native array results are independent Java sna
 Raw byte inputs are copied into temporary native storage. Borrowed results and
 filled output buffers become independent Java arrays. Nullability and required
 empty-buffer normalization follow the array rules above. Descriptor byte fields
-must point to const data; writable inputs require a copyback adapter. Scoped
-acquire/release access and direct native-memory views are not part of this support.
+must point to const data; writable inputs require a copyback adapter. Acquire/release access uses the scoped adapter described below; direct native-memory
+views are not exposed.
 
 Input pointers and references must borrow storage for the duration of the call,
 including pointers inside nested descriptors. Retained inputs and ownership
@@ -113,12 +113,49 @@ derived-to-base arguments use native pointer conversions while retaining the
 original wrapper's ownership.
 
 This first backend does not yet cover the entire JavaScript surface. Unsupported
-shapes fail generation: callbacks, scoped byte access, multiple interface bases,
+shapes fail generation: callbacks, multiple interface bases,
 mutable descriptor pointees, recursive descriptor graphs, read-only fixed-array
 fields, adapter-computed field sizes, inout parameters, and non-scalar
 constant exports. Native default arguments may be present, but Java callers
 currently supply every input argument.
 Radient selection, packaging, Android integration, and rendering are later steps.
+
+## Scoped byte access
+
+Pass `--adapters` with the shared `scoped_bytes` contract to bind acquire/release
+pairs. Acquisition returns the usual result object: `returnValue` is the native
+status and the pointer output becomes a `ReadByteScope` or `WriteByteScope`.
+Only the configured success status acquires access, including for empty spans;
+other statuses return a null scope. The release method is hidden on the owner.
+
+```java
+var result = blob.BeginWrite();
+if (result.ppData != null) {
+    try (var access = result.ppData) {
+        access.copyFrom(new byte[]{17, (byte)128, (byte)254});
+    }
+}
+```
+
+Both scope types provide `byteLength()`, `readByte(index)`, `copyTo(byte[])`,
+`copyTo(byte[], sourceOffset)`, and `toByteArray()`. Reads return unsigned byte
+values from 0 to 255. Writable scopes additionally provide `writeByte(index, value)`
+and `copyFrom(byte[], destinationOffset)` (the offset may be omitted). Bulk copies
+preserve every bit. Bounds, null arrays, and use after closing are checked; no
+native pointer or unchecked buffer view is exposed. Whole-scope snapshots must fit
+in a Java array, while smaller copies can address larger native spans.
+
+Scopes retain the native owner independently of its Java wrapper. `close()` calls
+the native release once. `release()` also returns its status; subsequent calls
+return that same status without repeating the release. A native failure status
+still consumes access. Failures during size validation or result construction
+roll back a successful acquisition. Byte operations synchronize with closing so
+an in-flight copy cannot lose its storage.
+
+Use try-with-resources: scopes have no Cleaner fallback, since the native release
+may require the acquiring thread. Synchronization protects scope lifetime, not the
+native API's broader threading contract. The native API must keep the span valid
+and its size fixed until release and enforce any reader/writer exclusion itself.
 
 ## Build and test
 

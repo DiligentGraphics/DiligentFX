@@ -14,8 +14,12 @@ backend = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(backend)
 
 
+ADAPTERS = backend.load_config(BACKEND.parent / "tests/native/Adapters.json")
+
+
 def generate(model, **kwargs):
-    return backend.Generator(model, "Fixture", "example.api", "FixtureJNI", ["API.h"], **kwargs).generate()
+    adapters = dict(ADAPTERS, **kwargs.pop("adapters", {}))
+    return backend.Generator(model, "Fixture", "example.api", "FixtureJNI", ["API.h"], adapters=adapters, **kwargs).generate()
 
 
 def declaration(model, name):
@@ -48,6 +52,95 @@ class GenerationTest(unittest.TestCase):
         })
         self.assertIn("EchoTestMode()", java)
         self.assertIn("Diligent::EchoTestMode(Diligent::TEST_MODE_LAST)", cpp)
+
+    def test_scoped_bytes_share_adapters_and_hide_release_methods(self):
+        java, cpp = generate(self.model)
+        self.assertIn("public IMarshalBytes_MapReadResult MapRead()", java)
+        self.assertIn("public ReadByteScope ppData;", java)
+        self.assertIn("public WriteByteScope ppData;", java)
+        self.assertNotIn("public int UnmapRead()", java)
+        self.assertNotIn("public int UnmapWrite()", java)
+        self.assertIn("Owner->MapRead(&Data)", cpp)
+        self.assertIn("Scope->Acquired = Status == 3", cpp)
+        self.assertIn("implements java.lang.AutoCloseable", java)
+
+    def test_scoped_release_is_suppressed_on_its_declaring_interface(self):
+        # Keep coverage for an inherited release that is not redeclared.
+        interface = declaration(self.model, "IMarshalBytes")
+        interface["methods"] = [m for m in interface["methods"] if m["name"] != "UnmapRead"]
+        generator = backend.Generator(self.model, "Fixture", "example.api", "FixtureJNI", ["API.h"], ADAPTERS)
+        self.assertEqual(generator.releases, {
+            "Diligent::IMarshalReadRelease::UnmapRead",
+            "Diligent::IMarshalBytes::UnmapWrite",
+            "Diligent::IMarshalDerivedBytes::UnmapRead",
+        })
+        java, _ = generator.generate()
+        self.assertIn("class IMarshalBytes extends IMarshalReadRelease", java)
+        self.assertNotIn("public int UnmapRead()", java)
+
+    def test_overridden_scope_release_hides_manual_and_automatic_bases(self):
+        for binding in ("manual", "automatic"):
+            with self.subTest(binding=binding):
+                model = deepcopy(self.model)
+                base = declaration(model, "IMarshalReadRelease")
+                base["methods"][0]["policy"] = {"binding": binding}
+                generator = backend.Generator(model, "Fixture", "example.api", "FixtureJNI", ["API.h"], ADAPTERS)
+                java, cpp = generator.generate()
+                self.assertEqual(generator.releases, {
+                    "Diligent::IMarshalReadRelease::UnmapRead",
+                    "Diligent::IMarshalBytes::UnmapRead",
+                    "Diligent::IMarshalBytes::UnmapWrite",
+                    "Diligent::IMarshalDerivedBytes::UnmapRead",
+                })
+                self.assertNotIn("public int UnmapRead()", java)
+                self.assertNotIn("public int UnmapWrite()", java)
+                # The native release still belongs to the scope adapter.
+                self.assertIn("->UnmapRead()", cpp)
+
+    def test_inherited_scope_hides_manual_and_automatic_descendant_releases(self):
+        expected = generate(self.model)
+        for binding in ("manual", "automatic"):
+            for reverse in (False, True):
+                with self.subTest(binding=binding, reverse=reverse):
+                    model = deepcopy(self.model)
+                    derived = declaration(model, "IMarshalDerivedBytes")
+                    derived["methods"][0]["policy"] = {"binding": binding}
+                    if reverse:
+                        model["declarations"].reverse()
+                    generator = backend.Generator(model, "Fixture", "example.api", "FixtureJNI", ["API.h"], ADAPTERS)
+                    java, cpp = generator.generate()
+                    self.assertIn("Diligent::IMarshalDerivedBytes::UnmapRead", generator.releases)
+                    self.assertNotIn("public int UnmapRead()", java)
+                    self.assertIn("class IMarshalDerivedBytes extends IMarshalBytes", java)
+                    if not reverse:
+                        # Both policies compile to the same tested Java/JNI wrapper.
+                        self.assertEqual((java, cpp), expected)
+
+    def test_unrelated_method_with_scope_release_name_stays_public(self):
+        derived = declaration(self.model, "IMarshalDerivedBytes")
+        derived["bases"] = ["Diligent::IObject"]
+        java, _ = generate(self.model)
+        self.assertIn("public int UnmapRead()", java)
+
+    def test_scoped_bytes_require_explicit_adapters(self):
+        with self.assertRaisesRegex(backend.ModelError, "manual function"):
+            generate(self.model, adapters={"scoped_bytes": {}})
+
+    def test_scoped_bytes_validate_acquire_release_and_size(self):
+        for change in ({"size": "Missing"}, {"release": "Size"}, {"success": 2 ** 31}):
+            with self.subTest(change=change):
+                adapters = deepcopy(ADAPTERS)
+                adapters["scoped_bytes"]["Diligent::IMarshalBytes::MapRead"].update(change)
+                with self.assertRaises(backend.ModelError):
+                    generate(self.model, adapters=adapters)
+
+    def test_byte_scope_runtime_names_cannot_be_shadowed(self):
+        for name in ("ReadByteScope", "WriteByteScope"):
+            with self.subTest(name=name):
+                model = deepcopy(self.model)
+                model["declarations"].append({"kind": "record", "name": "Diligent::" + name, "fields": []})
+                with self.assertRaisesRegex(backend.ModelError, "ambiguous declaration"):
+                    generate(model)
 
     def test_rejects_unbounded_numeric_pointer(self):
         declaration(self.model, "SumValues")["parameters"][0]["policy"].pop("length")

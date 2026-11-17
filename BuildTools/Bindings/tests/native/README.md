@@ -5,11 +5,14 @@ JavaScript compile the same sources and select their supported declarations.
 New language backends should reuse this corpus rather than copy its native code.
 
 - `BindingTestAPI.h` includes the portable fixture headers.
+- `BuffersC.c` checks the byte interfaces and inherited dispatch as C in both
+  the JNI and Wasm builds.
 - `API.json` records shared ownership, nullability, array bounds, and lifetimes.
   Backend configurations extend it and select the APIs their generators support.
   Policies for contracts currently selected by only one backend remain in that
   backend's configuration; move them here when another backend selects them.
   Paths are relative to `BuildTools/Bindings`.
+- `Adapters.json` records shared acquire/release contracts for scoped byte access.
 - Native functions check known values independently of language-side round trips.
   Distinct descriptor shapes and enum value sets remain separate test cases.
 - Language assertions stay in `java/tests` and `javascript/tests`; generator

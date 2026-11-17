@@ -13,8 +13,10 @@ from binding_model import ModelError
 from javascript.api_surface import build_surface, format_surface
 from javascript.generate import Generator
 
+from configuration import load_config
+
 MODEL = json.loads(Path(sys.argv.pop(1)).read_text(encoding="utf-8"))
-ADAPTERS = json.loads(Path(__file__).with_name("Adapters.json").read_text(encoding="utf-8"))
+ADAPTERS = load_config(Path(__file__).with_name("Adapters.json"))
 
 
 class APISurfaceTest(unittest.TestCase):
@@ -125,6 +127,7 @@ class APISurfaceTest(unittest.TestCase):
         baseline = self.surface()
         entries = baseline["entries"]
         self.assertNotIn("Diligent::IMarshalBytes::UnmapRead", entries)
+        self.assertNotIn("Diligent::IMarshalReadRelease::UnmapRead", entries)
         self.assertEqual(entries["Diligent::IMarshalBytes::MapRead"]["scope"],
                          {"release": "UnmapRead", "size": "Size", "success": 0, "writable": False})
         self.assertEqual(entries["Diligent::MarshalNestedCountDesc::pComputed"]["count_function"],

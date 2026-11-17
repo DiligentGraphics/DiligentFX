@@ -354,8 +354,8 @@ JavaScript property order does not affect marshalling.
 ## Scoped byte access
 
 Pass `--adapters path/to/Adapters.json` to the JavaScript generator to bind an
-interface's acquire/release pair. This configuration is specific to the JavaScript
-backend; the language-neutral model continues to mark those methods as manual.
+interface's acquire/release pair. The adapter contract is shared with other
+language backends; the language-neutral model marks those methods as manual.
 For example:
 
 ```json

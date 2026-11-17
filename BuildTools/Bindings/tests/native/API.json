@@ -650,6 +650,32 @@
             "lifetime": "object",
             "nullable": true
           }
+        },
+        "MapRead": {
+          "binding": "manual",
+          "reason": "The scoped byte adapter retains access and the owning interface.",
+          "parameters": {
+            "ppData": {
+              "lifetime": "read_scope"
+            }
+          }
+        },
+        "MapWrite": {
+          "binding": "manual",
+          "reason": "The scoped byte adapter retains access and the owning interface.",
+          "parameters": {
+            "ppData": {
+              "lifetime": "write_scope"
+            }
+          }
+        },
+        "UnmapWrite": {
+          "binding": "manual",
+          "reason": "Called only when the scoped byte adapter is disposed."
+        },
+        "UnmapRead": {
+          "binding": "manual",
+          "reason": "Called only when the scoped byte adapter is disposed."
         }
       }
     },
@@ -701,6 +727,14 @@
             "parameter": "Source",
             "method": "Size"
           }
+        }
+      }
+    },
+    "Diligent::IMarshalReadRelease": {
+      "methods": {
+        "UnmapRead": {
+          "binding": "manual",
+          "reason": "Called only when the scoped byte adapter is disposed."
         }
       }
     }

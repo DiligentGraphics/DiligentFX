@@ -112,6 +112,24 @@ test("read scopes expose independent copies and support offset destination views
     assert.equal(object.UnmapWrite, undefined);
 });
 
+test("derived wrappers keep inherited byte scopes open until scope disposal", t => {
+    const object = buffer(t);
+    const derived = object.QueryInterface(api.IMarshalDerivedBytes);
+    assert.ok(derived);
+    t.after(() => derived.dispose());
+    assert.equal(derived.UnmapRead, undefined);
+    assert.equal(derived.UnmapWrite, undefined);
+    const releases = api.GetBufferReleaseCount();
+    const reader = read(t, derived);
+    assert.equal(object.ReaderCount(), 1);
+    assert.equal(derived.Resize(8n), FAILED);
+    assert.equal(reader.readByte(0), 1);
+    reader.dispose();
+    assert.equal(object.ReaderCount(), 0);
+    assert.equal(api.GetBufferReleaseCount(), releases + 1);
+    assert.equal(derived.Resize(8n), OK);
+});
+
 test("write scopes copy subarrays into native storage and preserve surrounding bytes", t => {
     const object = buffer(t);
     const writer = write(t, object);

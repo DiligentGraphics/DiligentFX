@@ -49,6 +49,7 @@ add_custom_target(Bindings-GenerateJavaScriptTests
 
 # Pick up added and removed fixtures on the next build without editing this list.
 file(GLOB FIXTURE_SOURCES CONFIGURE_DEPENDS
+    "${NATIVE_FIXTURES}/*.c"
     "${NATIVE_FIXTURES}/*.cpp"
     "${TEST_SOURCE}/fixtures/*.c"
     "${TEST_SOURCE}/fixtures/*.cpp")

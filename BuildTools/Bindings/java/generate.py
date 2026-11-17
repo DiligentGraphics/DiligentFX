@@ -57,13 +57,13 @@ class Generator(BindingAPI):
         self.cpp = []
         self.native = []
         self.counter = 0
-        if self.scopes or self.field_count_functions:
-            raise ModelError("Java: scoped bytes and computed field sizes are not implemented yet")
+        if self.field_count_functions:
+            raise ModelError("Java: computed field sizes are not implemented yet")
         for name, declaration in self.types.items():
             if name in self.native_only or declaration["kind"] in ("external", "typedef"):
                 continue
             short = identifier(name.rsplit("::", 1)[-1])
-            if short in self.names or short in {module, "State", "NativeObject", "CLEANER", "java"}:
+            if short in self.names or short in {module, "State", "NativeObject", "CLEANER", "java", "ReadByteScope", "WriteByteScope"}:
                 raise ModelError(f"Java: ambiguous declaration name {short}")
             self.names[short] = name
         self.records = [d for d in self.types.values() if d["kind"] == "record"]
@@ -562,11 +562,11 @@ static inline void Write{short}Fields(JNIEnv* Env, jobject Object, const {name}&
     }}
 ''')
 
-    def emit_result_class(self, fn, owner, inputs, returns):
+    def emit_result_class(self, fn, owner, inputs, returns, types=None):
         name = self.short(fn["name"])
         qualified = owner + "::" + name if owner else fn["name"]
         signature = (name, tuple(self.info(p)[0] for p in fn["parameters"] if p in inputs))
-        types = [self.info(p) for p, _, _ in returns]
+        types = types if types is not None else [self.info(p) for p, _, _ in returns]
         fields = [identifier(p["name"]) for p, _, _ in returns]
         if len(set(fields)) != len(fields):
             raise ModelError(f"Java: result field name collision: {qualified}")
@@ -596,6 +596,8 @@ static inline void Write{short}Fields(JNIEnv* Env, jobject Object, const {name}&
     def emit_function(self, fn, owner=None):
         name = self.short(fn["name"])
         qualified = owner + "::" + name if owner else fn["name"]
+        if qualified in self.scopes:
+            return self.emit_scoped_bytes(fn, owner, self.scopes[qualified])
         if fn.get("policy", {}).get("binding", "automatic") != "automatic":
             raise ModelError(f"Java: manual function requires an adapter: {qualified}")
         parameters, inputs, outputs, lines, args, locals_ = [], [], [], [], [], {}
@@ -753,6 +755,108 @@ static inline void Write{short}Fields(JNIEnv* Env, jobject Object, const {name}&
         signature = f"public {'static ' if not owner else ''}{result_info[0]} {name}({public_args})"
         return signature + " { " + ("return " if result_info[0] != "void" else "") + native + "(" + ", ".join(call_args) + "); }"
 
+
+    def emit_scoped_bytes(self, fn, owner, spec):
+        name = self.short(fn["name"])
+        scope_class = "WriteByteScope" if spec["writable"] else "ReadByteScope"
+        scope_info = (scope_class, "jobject", "L" + self.path + "$" + scope_class + ";", "Object")
+        returns = [(dict(fn["result"], name="returnValue"), None, None), (fn["parameters"][0], None, None)]
+        result, fields = self.emit_result_class(fn, owner, [], returns, [SCALARS["i32"], scope_info])
+        writable = str(spec["writable"]).lower()
+        data_type = "void*" if spec["writable"] else "const void*"
+        lines = [f"Owned<{owner}> SelfNative;",
+                 f'ReadInterface(Env, Self, SelfNative, "{self.state_signature}", false, {self.interface_casts[owner]});',
+                 "std::unique_ptr<ByteScope> Scope{new ByteScope{SelfNative.Ptr,",
+                 f'    [](void* Owner) -> std::int32_t {{ return static_cast<{owner}*>(Owner)->{spec["release"]}(); }},',
+                 f"    [](void* Owner) {{ static_cast<{owner}*>(Owner)->Release(); }}, {writable}" + "}};",
+                 f"{owner}* Owner = SelfNative.Ptr;", "SelfNative.Ptr = nullptr;",
+                 f"{data_type} Data = nullptr;", f"const jint Status = Owner->{name}(&Data);",
+                 f'Scope->Acquired = Status == {spec["success"]};',
+                 f'jobject Result = NewObject(Env, "{self.path}${result[0]}");',
+                 f'Env->SetIntField(Result, Field(Env, Result, "{fields[0]}", "I"), Status);', "Check(Env);",
+                 "if (Scope->Acquired)", "{",
+                 f'    Scope->SetData(Env, Data, Owner->{spec["size"]}());',
+                 f'    const LocalRef<jobject> Access{{Env, NewObject(Env, "{self.path}${scope_class}")}};',
+                 '    const jfieldID PointerField = Field(Env, Access.Get(), "pointer", "J");',
+                 f'    Env->SetObjectField(Result, Field(Env, Result, "{fields[1]}", "{scope_info[2]}"), Access.Get());',
+                 "    Check(Env);",
+                 "    // Transfer only after validation and Java result construction succeed.",
+                 "    Env->SetLongField(Access.Get(), PointerField, static_cast<jlong>(reinterpret_cast<std::uintptr_t>(Scope.get())));",
+                 "    Check(Env);", "    Scope.release();", "}",
+                 "return Result;"]
+        native = self.native_method(result, [(self.short(owner), "jobject", "Self")], lines)
+        return f"public {result[0]} {name}() {{ return {native}(this); }}"
+
+    def emit_byte_scope_runtime(self):
+        pointer = [("long", "jlong", "Pointer")]
+        scope = "ByteScope& Scope = *reinterpret_cast<ByteScope*>(static_cast<std::uintptr_t>(Pointer));"
+        size = self.native_method(SCALARS["i64"], pointer, [scope, "return static_cast<jlong>(Scope.Size);"])
+        read = self.native_method(SCALARS["i32"], pointer + [("long", "jlong", "Offset")],
+                                 [scope, "Scope.CheckRange(Env, Offset, 1);", "return Scope.Data[static_cast<size_t>(Offset)];"])
+        write = self.native_method(SCALARS["void"], pointer + [("long", "jlong", "Offset"), ("int", "jint", "Value")],
+                                  [scope, 'Require(Env, Scope.Writable, "Byte scope is read-only");',
+                                   'Require(Env, Value >= 0 && Value <= 255, "Expected an unsigned byte value");',
+                                   "Scope.CheckRange(Env, Offset, 1);",
+                                   "const_cast<unsigned char*>(Scope.Data)[static_cast<size_t>(Offset)] = static_cast<unsigned char>(Value);"])
+        copy = self.native_method(SCALARS["void"], pointer + [("byte[]", "jbyteArray", "Bytes"), ("long", "jlong", "Offset"), ("boolean", "jboolean", "Write")],
+                                 [scope, 'Require(Env, Bytes != nullptr, "Byte array is null");',
+                                  'Require(Env, !Write || Scope.Writable, "Byte scope is read-only");',
+                                  "const jsize Count = Env->GetArrayLength(Bytes);", "Check(Env);",
+                                  "Scope.CheckRange(Env, Offset, static_cast<size_t>(Count));", "if (Count != 0)", "{",
+                                  "    const unsigned char* Data = Scope.Data + static_cast<size_t>(Offset);",
+                                  "    if (Write)", "        Env->GetByteArrayRegion(Bytes, 0, Count, reinterpret_cast<jbyte*>(const_cast<unsigned char*>(Data)));",
+                                  "    else", "        Env->SetByteArrayRegion(Bytes, 0, Count, reinterpret_cast<const jbyte*>(Data));", "    Check(Env);", "}"])
+        release = self.native_method(SCALARS["i32"], pointer,
+                                     ["const std::unique_ptr<ByteScope> Scope{reinterpret_cast<ByteScope*>(static_cast<std::uintptr_t>(Pointer))};",
+                                      "return Scope->Release();"])
+        self.java.append(f'''    /** Explicitly closed native access; no native address or buffer view is exposed. */
+    public static class ReadByteScope implements java.lang.AutoCloseable {{
+        private long pointer;
+        private int releaseStatus;
+        private ReadByteScope() {{}}
+        private long requireOpen() {{
+            if (pointer == 0) throw new java.lang.IllegalStateException("Byte scope is closed");
+            return pointer;
+        }}
+        public final synchronized boolean isClosed() {{ return pointer == 0; }}
+        public final synchronized long byteLength() {{ return {size}(requireOpen()); }}
+        /** Returns an unsigned byte in the range 0..255. */
+        public final synchronized int readByte(long index) {{ return {read}(requireOpen(), index); }}
+        public final void copyTo(byte[] destination) {{ copyTo(destination, 0); }}
+        public final synchronized void copyTo(byte[] destination, long sourceOffset) {{
+            {copy}(requireOpen(), destination, sourceOffset, false);
+        }}
+        public final synchronized byte[] toByteArray() {{
+            long length = byteLength();
+            if (length > java.lang.Integer.MAX_VALUE) throw new java.lang.IllegalArgumentException("Byte scope is too large for a Java array");
+            byte[] bytes = new byte[(int)length];
+            copyTo(bytes);
+            return bytes;
+        }}
+        /** Consumes the scope and returns the native release status, even on failure. */
+        public final synchronized int release() {{
+            if (pointer != 0) {{
+                long value = pointer;
+                pointer = 0;
+                releaseStatus = {release}(value);
+            }}
+            return releaseStatus;
+        }}
+        @java.lang.Override public final void close() {{ release(); }}
+    }}
+
+    public static final class WriteByteScope extends ReadByteScope {{
+        private WriteByteScope() {{}}
+        public synchronized void writeByte(long index, int value) {{
+            {write}(((ReadByteScope)this).requireOpen(), index, value);
+        }}
+        public void copyFrom(byte[] source) {{ copyFrom(source, 0); }}
+        public synchronized void copyFrom(byte[] source, long destinationOffset) {{
+            {copy}(((ReadByteScope)this).requireOpen(), source, destinationOffset, true);
+        }}
+    }}
+''')
+
     def scalar_literal(self, t, value):
         java = self.scalar_info(t)[0]
         if java == "boolean":
@@ -810,6 +914,8 @@ static inline void Write{short}Fields(JNIEnv* Env, jobject Object, const {name}&
         includes = "\n".join('#include "' + h + '"' for h in self.headers)
         self.cpp.append('// Generated; do not edit.\n#include "JNIRuntime.hpp"\n#include <algorithm>\n#include <array>\n' + includes + '\nusing namespace DiligentBindings;\n')
         self.emit_interface_casts()
+        if self.scopes:
+            self.emit_byte_scope_runtime()
         scalar_types = {}
         def collect(value):
             if isinstance(value, dict):
@@ -874,7 +980,8 @@ static inline void Write{short}Fields(JNIEnv* Env, jobject Object, const {name}&
             if self.types[base]["kind"] == "interface":
                 interface(self.types[base])
             # Emit base methods first so overrides can reuse their result classes.
-            methods = [self.emit_function(m, d["name"]) for m in d["methods"]]
+            methods = [self.emit_function(m, d["name"]) for m in d["methods"]
+                       if d["name"] + "::" + m["name"] not in self.releases]
             short = self.short(d["name"])
             index = interface_indices[d["name"]]
             parent = self.short(base) if self.types[base]["kind"] == "interface" else "NativeObject"

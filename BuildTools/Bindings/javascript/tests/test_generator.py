@@ -11,8 +11,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from javascript.generate import Generator, write
 from binding_model import ModelError
 
+from configuration import load_config
+
 MODEL = json.loads(Path(sys.argv.pop(1)).read_text(encoding="utf-8"))
-ADAPTERS = json.loads(Path(__file__).with_name("Adapters.json").read_text(encoding="utf-8"))
+ADAPTERS = load_config(Path(__file__).with_name("Adapters.json"))
 
 
 class GeneratorTest(unittest.TestCase):
@@ -502,7 +504,7 @@ class GeneratorTest(unittest.TestCase):
 
     def test_scope_size_query_can_be_inherited(self):
         model = deepcopy(MODEL)
-        interface = self.declaration(model, "IMarshalBytes")
+        interface = self.declaration(model, "IMarshalReadRelease")
         interface["bases"] = ["Diligent::IMarshalObject"]
         adapters = deepcopy(ADAPTERS)
         for scope in adapters["scoped_bytes"].values():
@@ -519,6 +521,42 @@ class GeneratorTest(unittest.TestCase):
         self.assertFalse(methods["MapRead"]["scope"]["writable"])
         self.assertTrue(methods["MapWrite"]["scope"]["writable"])
         self.assertEqual(adapters, original)
+
+    def test_overridden_scope_release_hides_manual_and_automatic_bases(self):
+        for binding in ("manual", "automatic"):
+            with self.subTest(binding=binding):
+                model = deepcopy(MODEL)
+                self.declaration(model, "IMarshalReadRelease")["methods"][0]["policy"] = {"binding": binding}
+                generator = Generator(model, "BindingTests", ["Interfaces.h"], ADAPTERS)
+                cpp, _, types = generator.generate()
+                for name in ("IMarshalReadRelease", "IMarshalBytes"):
+                    self.assertNotIn("UnmapRead", generator.schema["interfaces"][name]["methods"])
+                self.assertNotIn("UnmapRead()", types)
+                self.assertIn("->UnmapRead()", cpp)
+
+    def test_inherited_scope_hides_manual_and_automatic_descendant_releases(self):
+        expected = self.emit()
+        for binding in ("manual", "automatic"):
+            for reverse in (False, True):
+                with self.subTest(binding=binding, reverse=reverse):
+                    model = deepcopy(MODEL)
+                    derived = self.declaration(model, "IMarshalDerivedBytes")
+                    derived["methods"][0]["policy"] = {"binding": binding}
+                    if reverse:
+                        model["declarations"].reverse()
+                    generator = Generator(model, "BindingTests", ["Interfaces.h"], ADAPTERS)
+                    output = generator.generate()
+                    self.assertNotIn("UnmapRead", generator.schema["interfaces"]["IMarshalDerivedBytes"]["methods"])
+                    self.assertNotIn("UnmapRead()", output[2])
+                    if not reverse:
+                        self.assertEqual(output, expected)
+
+    def test_unrelated_method_with_scope_release_name_stays_public(self):
+        model = deepcopy(MODEL)
+        self.declaration(model, "IMarshalDerivedBytes")["bases"] = ["Diligent::IObject"]
+        generator = Generator(model, "BindingTests", ["Interfaces.h"], ADAPTERS)
+        generator.generate()
+        self.assertIn("UnmapRead", generator.schema["interfaces"]["IMarshalDerivedBytes"]["methods"])
 
     def test_scope_methods_require_an_explicit_adapter(self):
         with self.assertRaisesRegex(ModelError, "explicit JavaScript adapter"):

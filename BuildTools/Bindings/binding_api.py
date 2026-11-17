@@ -59,7 +59,21 @@ class BindingAPI:
         self.releases = set()
         for name, scope in scopes.items():
             self.scopes[name] = self.validate_scope(name, scope)
-            self.releases.add(name.rsplit("::", 1)[0] + "::" + scope["release"])
+            # Suppress overrides and base declarations, regardless of their binding
+            # policy: an inherited public release could invalidate an open scope.
+            for owner in self.interface_method_owners(name.rsplit("::", 1)[0], scope["release"]):
+                self.releases.add(owner + "::" + scope["release"])
+
+        # A descendant may inherit acquisition but redeclare release. Suppress
+        # these overrides too, regardless of policy or declaration order. Checking
+        # ancestry preserves unrelated methods that happen to have the same name.
+        for declaration in self.types.values():
+            if declaration["kind"] != "interface":
+                continue
+            for method in declaration["methods"]:
+                if any(owner + "::" + method["name"] in self.releases
+                       for owner in self.interface_method_owners(declaration["name"], method["name"])):
+                    self.releases.add(declaration["name"] + "::" + method["name"])
 
     def configure_selection(self, field_policies):
         """Apply backend selections without modifying the source model."""
@@ -133,6 +147,20 @@ class BindingAPI:
         if not -(2 ** 31) <= spec["success"] < 2 ** 31:
             raise ModelError(f"{name}: scoped access requires a 32-bit signed status")
         return dict(spec, writable=not byte["const"])
+
+    def interface_method_owners(self, name, method):
+        """Enumerate every declaration of a method throughout the inheritance chain."""
+        pending = [name]
+        visited = set()
+        while pending:
+            owner = pending.pop()
+            if owner in visited:
+                continue
+            visited.add(owner)
+            declaration = self.types.get(owner, {})
+            if any(m["name"] == method for m in declaration.get("methods", [])):
+                yield owner
+            pending.extend(declaration.get("bases", []))
 
     def interface_methods(self, name):
         declaration = self.types.get(name, {})

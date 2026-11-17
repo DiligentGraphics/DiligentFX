@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.24)
 
 # Standalone JNI conformance tests: no renderer, Radient library, or browser.
-project(DiligentJavaBindings LANGUAGES CXX)
+project(DiligentJavaBindings LANGUAGES C CXX)
 enable_testing()
 
 if(CMAKE_CROSSCOMPILING)
@@ -62,11 +62,14 @@ add_custom_target(Bindings-GenerateJavaTests
         --model "${MODEL}" --module BindingTests --package diligent.bindings.tests
         --library BindingTestsJNI --header BindingTestAPI.h --header JavaNames.h
         --header NativeExceptions.h --header Threading.h --output "${GENERATED}"
+        --adapters "${NATIVE_FIXTURES}/Adapters.json"
     BYPRODUCTS "${MODEL}" "${GENERATED}/BindingTests.java" "${GENERATED}/BindingTests.cpp"
     COMMENT "Generating Java/JNI binding test API"
     VERBATIM)
 
-file(GLOB FIXTURE_SOURCES CONFIGURE_DEPENDS "${NATIVE_FIXTURES}/*.cpp" "${TEST_SOURCE}/fixtures/*.cpp")
+file(GLOB FIXTURE_SOURCES CONFIGURE_DEPENDS
+    "${NATIVE_FIXTURES}/*.c" "${NATIVE_FIXTURES}/*.cpp"
+    "${TEST_SOURCE}/fixtures/*.cpp")
 add_library(BindingTestsJNI SHARED "${GENERATED}/BindingTests.cpp" ${FIXTURE_SOURCES})
 add_dependencies(BindingTestsJNI Bindings-GenerateJavaTests)
 target_include_directories(BindingTestsJNI PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}" "${TEST_SOURCE}/fixtures" "${NATIVE_FIXTURES}"
@@ -74,7 +77,7 @@ target_include_directories(BindingTestsJNI PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}"
 target_compile_features(BindingTestsJNI PRIVATE cxx_std_17)
 target_compile_definitions(BindingTestsJNI PRIVATE ${PLATFORM_DEFINITION})
 if(MSVC)
-    target_compile_options(BindingTestsJNI PRIVATE /W4 /WX /EHsc)
+    target_compile_options(BindingTestsJNI PRIVATE /W4 /WX $<$<COMPILE_LANGUAGE:CXX>:/EHsc>)
 else()
     target_compile_options(BindingTestsJNI PRIVATE -Wall -Wextra -Werror)
 endif()

@@ -50,7 +50,7 @@ Uint64 WriteBytePrefix(void* pBytes, Uint64 Capacity)
 // Controlled byte storage for marshalling tests, independent of any production
 // blob implementation. Read and write acquisitions deliberately return different
 // success codes to exercise the explicit adapter contract.
-class MarshalBytes final : public IMarshalBytes
+class MarshalBytes final : public IMarshalDerivedBytes
 {
 public:
     explicit MarshalBytes(const MarshalBufferDesc& Desc) :
@@ -65,7 +65,7 @@ public:
     void DILIGENT_CALL_TYPE QueryInterface(const INTERFACE_ID& IID, IObject** ppObject) override
     {
         *ppObject = nullptr;
-        if (IID == IID_Unknown || IID == IID_MarshalBytes)
+        if (IID == IID_Unknown || IID == IID_MarshalBytes || IID == IID_MarshalReadRelease || IID == IID_MarshalDerivedBytes)
         {
             *ppObject = this;
             AddRef();

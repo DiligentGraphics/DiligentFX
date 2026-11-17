@@ -51,19 +51,46 @@ typedef struct MarshalBytePacket MarshalBytePacket;
 static DILIGENT_CONSTEXPR INTERFACE_ID IID_MarshalBytes =
     {0x91234567, 0x1234, 0x5678, {0x90, 0xab, 0xcd, 0xef, 0x12, 0x34, 0x56, 0x78}};
 
+static DILIGENT_CONSTEXPR INTERFACE_ID IID_MarshalReadRelease =
+    {0x91234568, 0x1234, 0x5678, {0x90, 0xab, 0xcd, 0xef, 0x12, 0x34, 0x56, 0x78}};
+
+typedef struct IMarshalReadRelease IMarshalReadRelease;
+
+#define DILIGENT_INTERFACE_NAME IMarshalReadRelease
+#include "DefineInterfaceHelperMacros.h"
+#define IMarshalReadReleaseInclusiveMethods \
+    IObjectInclusiveMethods;               \
+    IMarshalReadReleaseMethods MarshalReadRelease
+
+// The scope adapter names this method through the derived IMarshalBytes.
+// clang-format off
+DILIGENT_BEGIN_INTERFACE(IMarshalReadRelease, IObject)
+{
+    VIRTUAL MARSHAL_STATUS METHOD(UnmapRead)(THIS) PURE;
+};
+DILIGENT_END_INTERFACE
+#include "UndefInterfaceHelperMacros.h"
+#if DILIGENT_C_INTERFACE
+#    define IMarshalReadRelease_UnmapRead(This) CALL_IFACE_METHOD(MarshalReadRelease, UnmapRead, This)
+#endif
+// clang-format on
+
 #define DILIGENT_INTERFACE_NAME IMarshalBytes
 #include "DefineInterfaceHelperMacros.h"
-#define IMarshalBytesInclusiveMethods \
-    IObjectInclusiveMethods;          \
+#define IMarshalBytesInclusiveMethods    \
+    IMarshalReadReleaseInclusiveMethods; \
     IMarshalBytesMethods MarshalBytes
 
 // clang-format off
-DILIGENT_BEGIN_INTERFACE(IMarshalBytes, IObject)
+DILIGENT_BEGIN_INTERFACE(IMarshalBytes, IMarshalReadRelease)
 {
+#if DILIGENT_CPP_INTERFACE
+    // Redeclare release without adding a second C vtable slot.
+    virtual MARSHAL_STATUS METHOD(UnmapRead)() override = 0;
+#endif
     VIRTUAL Uint64 METHOD(Size)(THIS) CONST PURE;
     VIRTUAL const void* METHOD(GetData)(THIS) CONST PURE;
     VIRTUAL MARSHAL_STATUS METHOD(MapRead)(THIS_ const void** ppData) PURE;
-    VIRTUAL MARSHAL_STATUS METHOD(UnmapRead)(THIS) PURE;
     VIRTUAL MARSHAL_STATUS METHOD(MapWrite)(THIS_ void** ppData) PURE;
     VIRTUAL MARSHAL_STATUS METHOD(UnmapWrite)(THIS) PURE;
     VIRTUAL MARSHAL_STATUS METHOD(Resize)(THIS_ Uint64 Size) PURE;
@@ -79,7 +106,36 @@ DILIGENT_END_INTERFACE
 #    define IMarshalBytes_Size(This) CALL_IFACE_METHOD(MarshalBytes, Size, This)
 #    define IMarshalBytes_GetData(This) CALL_IFACE_METHOD(MarshalBytes, GetData, This)
 #    define IMarshalBytes_MapRead(This, ...) CALL_IFACE_METHOD(MarshalBytes, MapRead, This, __VA_ARGS__)
-#    define IMarshalBytes_UnmapRead(This) CALL_IFACE_METHOD(MarshalBytes, UnmapRead, This)
+#    define IMarshalBytes_UnmapRead(This) IMarshalReadRelease_UnmapRead(This)
+#endif
+
+// Inherit the scope acquisition but override its release. This override must
+// stay private to the scope even when its binding policy is automatic.
+typedef struct IMarshalDerivedBytes IMarshalDerivedBytes;
+static DILIGENT_CONSTEXPR INTERFACE_ID IID_MarshalDerivedBytes =
+    {0x91234569, 0x1234, 0x5678, {0x90, 0xab, 0xcd, 0xef, 0x12, 0x34, 0x56, 0x78}};
+
+#define DILIGENT_INTERFACE_NAME IMarshalDerivedBytes
+#include "DefineInterfaceHelperMacros.h"
+#define IMarshalDerivedBytesInclusiveMethods IMarshalBytesInclusiveMethods
+#if DILIGENT_CPP_INTERFACE
+DILIGENT_BEGIN_INTERFACE(IMarshalDerivedBytes, IMarshalBytes)
+{
+    virtual MARSHAL_STATUS METHOD(UnmapRead)() override = 0;
+};
+DILIGENT_END_INTERFACE
+#else
+// There are no new C vtable slots. Avoid creating an empty Methods struct,
+// which MSVC's C compiler rejects.
+typedef IMarshalBytesVtbl IMarshalDerivedBytesVtbl;
+struct IMarshalDerivedBytes
+{
+    IMarshalDerivedBytesVtbl* pVtbl;
+};
+#endif
+#include "UndefInterfaceHelperMacros.h"
+#if DILIGENT_C_INTERFACE
+#    define IMarshalDerivedBytes_UnmapRead(This) IMarshalBytes_UnmapRead(This)
 #endif
 
 #include "DefineRefMacro.h"
