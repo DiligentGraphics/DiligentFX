@@ -366,8 +366,10 @@ class Generator(BindingAPI):
                                                   "Array" + str(index), f"Out.Storage{index}")
                 else:
                     child = self.short(t["name"])
-                    storage.append(f"Input{child} Storage{index};")
-                    read += [f"Read{child}(Env, FieldValue{index}.Get(), Out.Storage{index});", f"Out.Value.{member} = Out.Storage{index}.Value;"]
+                    # As with descriptor arrays, keep the child's conversion storage
+                    # alive without duplicating its native value on the JVM stack.
+                    storage.append(f"std::unique_ptr<Input{child}> Storage{index} = std::make_unique<Input{child}>();")
+                    read += [f"Read{child}(Env, FieldValue{index}.Get(), *Out.Storage{index});", f"Out.Value.{member} = Out.Storage{index}->Value;"]
             lines, expr = self.write(field, "Value." + member, "FieldValue" + str(index), validate_required="ValidateRequiredFields")
             write += [f'const jfieldID Field{index} = Field(Env, Object, "{member}", "{sig}");'] + lines
             write += [f"Env->Set{suffix}Field(Object, Field{index}, {expr});", "Check(Env);"]

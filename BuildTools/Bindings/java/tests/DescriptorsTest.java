@@ -15,6 +15,9 @@ public final class DescriptorsTest {
             throwsType(IllegalArgumentException.class, () -> ReadRequiredName(desc));
             desc.Inner.Name = "assigned";
             equal("assigned", ReadRequiredName(desc));
+            // Nested conversion storage owns this allocation through the native call.
+            desc.Inner.Name = "nested name ".repeat(64) + "\uD83D\uDE00";
+            equal(desc.Inner.Name, ReadRequiredName(desc));
             // Only initialization may expose incomplete defaults. Native results
             // must still satisfy the descriptor's required-field contract.
             throwsType(IllegalArgumentException.class, BindingTests::GetIncompleteDesc);

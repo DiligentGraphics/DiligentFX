@@ -105,5 +105,16 @@ const TestLargeDescriptorArray& EchoLargeDescriptorArray(const TestLargeDescript
     return Desc;
 }
 
+Bool CheckLargeArrayPacket(const TestLargeArrayPacket& Desc)
+{
+    return CheckLargeDescriptorArray(Desc.Image);
+}
+
+const TestLargeArrayPacket& EchoLargeArrayPacket(const TestLargeArrayPacket& Desc)
+{
+    ++FixedCallCount;
+    return Desc;
+}
+
 Uint32 GetFixedCallCount() { return FixedCallCount; }
 } // namespace Diligent

@@ -85,7 +85,17 @@ struct TestLargeDescriptorArray
 };
 typedef struct TestLargeDescriptorArray TestLargeDescriptorArray;
 
+// Ordinary descriptor nesting must not add an inline copy of the image
+// to the conversion storage retained for the native call.
+struct TestLargeArrayPacket
+{
+    TestLargeDescriptorArray Image;
+};
+typedef struct TestLargeArrayPacket TestLargeArrayPacket;
+
 #include "DefineRefMacro.h"
+Bool DILIGENT_GLOBAL_FUNCTION(CheckLargeArrayPacket)(const TestLargeArrayPacket REF Desc);
+const TestLargeArrayPacket REF DILIGENT_GLOBAL_FUNCTION(EchoLargeArrayPacket)(const TestLargeArrayPacket REF Desc);
 Bool DILIGENT_GLOBAL_FUNCTION(CheckLargeDescriptorArray)(const TestLargeDescriptorArray REF Desc);
 const TestLargeDescriptorArray REF DILIGENT_GLOBAL_FUNCTION(EchoLargeDescriptorArray)(const TestLargeDescriptorArray REF Desc);
 Bool DILIGENT_GLOBAL_FUNCTION(CheckLargeFixedInput)(const TestLargeFixedArray REF Desc);

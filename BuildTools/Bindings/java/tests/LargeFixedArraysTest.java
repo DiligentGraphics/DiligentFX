@@ -68,5 +68,34 @@ public final class LargeFixedArraysTest {
             throwsType(IllegalArgumentException.class, () -> CheckLargeDescriptorArray(desc));
             equal(calls, GetFixedCallCount());
         });
+        run("LargeFixedArrays.NestedDescriptorDefaults", () -> {
+            TestLargeArrayPacket desc = new TestLargeArrayPacket();
+            equal(400 * 400, desc.Image.Pixels.length);
+            for (TestFixedPixel pixel : desc.Image.Pixels) equal(17L, pixel.Value);
+        });
+        run("LargeFixedArrays.NestedDescriptorInputAndSnapshot", () -> {
+            TestLargeArrayPacket source = new TestLargeArrayPacket();
+            for (int i = 0; i < source.Image.Pixels.length; ++i) source.Image.Pixels[i].Value = i * 37L + 11;
+            check(CheckLargeArrayPacket(source));
+            TestLargeArrayPacket copy = EchoLargeArrayPacket(source);
+            check(source.Image != copy.Image);
+            check(source.Image.Pixels != copy.Image.Pixels);
+            for (int i = 0; i < source.Image.Pixels.length; ++i) {
+                equal(source.Image.Pixels[i].Value, copy.Image.Pixels[i].Value);
+                check(source.Image.Pixels[i] != copy.Image.Pixels[i]);
+            }
+            source.Image.Pixels[0].Value = 0;
+            source.Image.Pixels[source.Image.Pixels.length - 1].Value = 0;
+            check(CheckLargeArrayPacket(copy));
+        });
+        run("LargeFixedArrays.NestedDescriptorValidationBeforeNativeCall", () -> {
+            TestLargeArrayPacket desc = new TestLargeArrayPacket();
+            desc.Image.Pixels[desc.Image.Pixels.length - 1].Value = 0x100000000L;
+            long calls = GetFixedCallCount();
+            throwsType(IllegalArgumentException.class, () -> CheckLargeArrayPacket(desc));
+            desc.Image = null;
+            throwsType(IllegalArgumentException.class, () -> CheckLargeArrayPacket(desc));
+            equal(calls, GetFixedCallCount());
+        });
     }
 }
