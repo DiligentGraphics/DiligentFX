@@ -38,30 +38,42 @@ std::condition_variable GateChanged;
 bool                    Entered  = false;
 bool                    Released = false;
 } // namespace
-void ResetCounterCallGate()
+void ResetCallGate()
 {
     std::lock_guard<std::mutex> Lock{GateMutex};
     Entered  = false;
     Released = false;
 }
-Bool WaitForCounterCall(Uint32 Milliseconds)
+Bool WaitForCall(Uint32 Milliseconds)
 {
     std::unique_lock<std::mutex> Lock{GateMutex};
     return GateChanged.wait_for(Lock, std::chrono::milliseconds{Milliseconds}, [] { return Entered; });
 }
-void ReleaseCounterCall()
+void ReleaseCall()
 {
     std::lock_guard<std::mutex> Lock{GateMutex};
     Released = true;
     GateChanged.notify_all();
 }
-Uint64 ReadCounterBlocked(ITestCounter* pCounter)
+namespace
+{
+void WaitAtCallGate()
 {
     std::unique_lock<std::mutex> Lock{GateMutex};
     Entered = true;
     GateChanged.notify_all();
     GateChanged.wait(Lock, [] { return Released; });
+}
+} // namespace
+Uint64 ReadCounterBlocked(ITestCounter* pCounter)
+{
+    WaitAtCallGate();
     // Read only after Java has closed the wrapper on another thread.
     return pCounter->GetValue();
+}
+Uint64 SumInterfacesBlocked(const MarshalInterfaceDesc& Desc)
+{
+    WaitAtCallGate();
+    return SumInterfaces(Desc);
 }
 } // namespace Diligent

@@ -1,6 +1,17 @@
 export function registerTests({test, assert, api, constants}) {
     const pending = api.MARSHAL_STATUS.MARSHAL_STATUS_PENDING;
 
+    test("unrelated shared interfaces have distinct query identifiers", t => {
+        const object = api.CreateMarshalObject({}, 0, true).value;
+        const tagged = object.QueryInterface(api.IMarshalTaggedObject);
+        const base = api.CreateMarshalOverrides();
+        const derived = base.QueryInterface(api.IMarshalDerivedOverrides);
+        t.after(() => { derived.dispose(); base.dispose(); tagged.dispose(); object.dispose(); });
+        assert.equal(tagged.QueryInterface(api.IMarshalBytes), null);
+        assert.equal(base.QueryInterface(api.IMarshalStrings), null);
+        assert.equal(derived.QueryInterface(api.IMarshalSnapshots), null);
+    });
+
     test("covariant descriptor and redeclared output methods preserve native overrides", t => {
         const base = api.CreateMarshalOverrides();
         const derived = base.QueryInterface(api.IMarshalDerivedOverrides);

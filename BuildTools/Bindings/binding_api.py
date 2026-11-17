@@ -10,8 +10,10 @@ def cpp_type(t):
     qualifier = "const " if t["const"] else ""
     if t["kind"] in ("alias", "named"):
         return qualifier + t["name"]
-    if t["kind"] in ("pointer", "reference"):
-        return cpp_type(t["target"]) + ("*" if t["kind"] == "pointer" else "&")
+    if t["kind"] == "pointer":
+        return cpp_type(t["target"]) + "*" + (" const" if t["const"] else "")
+    if t["kind"] == "reference":
+        return cpp_type(t["target"]) + "&"
     if t["kind"] == "void":
         return qualifier + "void"
     names = {"char_s": "char", "char_u": "char", "schar": "signed char", "uchar": "unsigned char",

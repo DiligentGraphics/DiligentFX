@@ -351,6 +351,13 @@ public:
     {
         if (!Value.Ptr)
             return nullptr;
+        // Pending snapshots retain one local State reference per wrapped interface.
+        // Reserve room for this wrapper and the temporary JNI references it needs.
+        if (m_Env->EnsureLocalCapacity(16) != JNI_OK)
+        {
+            Check(m_Env);
+            throw std::bad_alloc{};
+        }
         jobject        Result     = NewObject(m_Env, ClassName);
         const jfieldID StateField = Field(m_Env, Result, "state", StateSignature);
         jobject        State      = m_Env->GetObjectField(Result, StateField);
@@ -379,6 +386,83 @@ inline jsize ArrayCount(JNIEnv* Env, std::uint64_t Count)
 {
     Require(Env, Count <= static_cast<std::uint64_t>((std::numeric_limits<jsize>::max)()), "Array count is too large for Java");
     return static_cast<jsize>(Count);
+}
+
+// Contiguous native pointers and the references keeping their objects alive
+// share one allocation. Partially converted arrays release only acquired refs.
+template <typename T>
+class InterfaceArray
+{
+public:
+    InterfaceArray()                      = default;
+    InterfaceArray(const InterfaceArray&) = delete;
+    InterfaceArray& operator=(const InterfaceArray&) = delete;
+    ~InterfaceArray()
+    {
+        for (jsize Index = 0; Index < m_Count; ++Index)
+        {
+            if (m_Values[Index])
+                m_Values[Index]->Release();
+        }
+    }
+    void Allocate(jsize Count)
+    {
+        m_Values.reset(new T* [static_cast<size_t>(Count)] {});
+        m_Count = Count;
+    }
+    T** Data() { return m_Values.get(); }
+
+private:
+    std::unique_ptr<T*[]> m_Values;
+    jsize                 m_Count = 0;
+};
+
+template <typename T>
+void ReadInterfaceArray(JNIEnv* Env, jobjectArray Value, std::uint64_t Count, InterfaceArray<T>& Result, const char* StateSignature, bool Nullable, bool ElementNullable, T* (*Cast)(std::uintptr_t, jint))
+{
+    Require(Env, Value != nullptr || Nullable || Count == 0, "Nonempty interface array is null");
+    if (!Value && Nullable)
+        return;
+    const jsize Size = ArrayCount(Env, Count);
+    if (Value)
+        Require(Env, Env->GetArrayLength(Value) >= Size, "Interface array is shorter than its count");
+    // A required zero-length input still has non-null native storage.
+    Result.Allocate(Size);
+    for (jsize Index = 0; Index < Size; ++Index)
+    {
+        const LocalRef<jobject> Item{Env, Env->GetObjectArrayElement(Value, Index)};
+        Owned<T>                Reference;
+        ReadInterface(Env, Item.Get(), Reference, StateSignature, ElementNullable, Cast);
+        Result.Data()[Index] = Reference.Ptr;
+        Reference.Ptr        = nullptr;
+    }
+}
+
+template <typename T>
+jobjectArray WriteInterfaceArray(JNIEnv* Env, T* const* Values, std::uint64_t Count, Transfers& Pending, const char* ClassName, const char* StateSignature, bool Nullable, bool ElementNullable, bool ValidateRequiredFields)
+{
+    Require(Env, !ValidateRequiredFields || Values != nullptr || Nullable || Count == 0,
+            "Native function returned a null interface array");
+    if (!Values && (Nullable || !ValidateRequiredFields))
+        return nullptr;
+    const jsize                  Size = Values ? ArrayCount(Env, Count) : 0;
+    const LocalRef<jclass>       Class{Env, Env->FindClass(ClassName)};
+    const LocalRef<jobjectArray> Result{Env, Env->NewObjectArray(Size, Class.Get(), nullptr)};
+    for (jsize Index = 0; Index < Size; ++Index)
+    {
+        Require(Env, !ValidateRequiredFields || Values[Index] != nullptr || ElementNullable,
+                "Native function returned a null interface array element");
+        Owned<T> Reference;
+        Reference.Ptr = Values[Index];
+        if (Reference.Ptr)
+            Reference.Ptr->AddRef();
+        const LocalRef<jobject> Item{Env, Pending.Wrap(Reference, ClassName, StateSignature)};
+        Env->SetObjectArrayElement(Result.Get(), Index, Item.Get());
+        Check(Env);
+    }
+    jobjectArray Copy = static_cast<jobjectArray>(Env->NewLocalRef(Result.Get()));
+    Check(Env);
+    return Copy;
 }
 
 } // namespace DiligentBindings

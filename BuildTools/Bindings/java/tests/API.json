@@ -18,6 +18,17 @@
       "java/tests/fixtures/*.h"
     ],
     "include": [
+      "Diligent::EchoInterfaceArray",
+      "Diligent::CopyInterfaceArray",
+      "Diligent::GetRequiredInterfaceArray",
+      "Diligent::InterfaceArrayHasStorage",
+      "Diligent::EchoInterfaceGroup",
+      "Diligent::EchoRequiredInterfaces",
+      "Diligent::GetRequiredInterfaceSnapshot",
+      "Diligent::SumInterfaces",
+      "Diligent::SumInterfaceArray",
+      "Diligent::EchoInterfaces",
+      "Diligent::GetInvalidInterfaceSnapshot",
       "Diligent::IMarshalBaseOverrides",
       "Diligent::IMarshalDerivedOverrides",
       "Diligent::CreateMarshalOverrides",

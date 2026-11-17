@@ -12,6 +12,13 @@
       "tests/native/TestScalars.h"
     ],
     "include": [
+      "Diligent::EchoInterfaceArray",
+      "Diligent::CopyInterfaceArray",
+      "Diligent::GetRequiredInterfaceArray",
+      "Diligent::InterfaceArrayHasStorage",
+      "Diligent::EchoInterfaceGroup",
+      "Diligent::EchoRequiredInterfaces",
+      "Diligent::GetRequiredInterfaceSnapshot",
       "Diligent::IMarshalBaseOverrides",
       "Diligent::IMarshalDerivedOverrides",
       "Diligent::CreateMarshalOverrides",
@@ -407,23 +414,6 @@
     "Diligent::MakeFailingOutputs": {
       "parameters": {
         "ppInvalid": {"lifetime": "static"}
-      }
-    },
-    "Diligent::MarshalInterfaceDesc": {
-      "fields": {
-        "ppObjects": {
-          "length": "Count",
-          "element_nullable": true
-        },
-        "Label": {"nullable": false}
-      }
-    },
-    "Diligent::SumInterfaceArray": {
-      "parameters": {
-        "ppObjects": {
-          "length": "Count",
-          "element_nullable": true
-        }
       }
     },
     "Diligent::ReadStructPointer": {"parameters": {"pData": {"nullable": true}}},

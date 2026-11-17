@@ -41,11 +41,35 @@ struct MarshalInterfaceDesc
     const Char* Label DEFAULT_INITIALIZER("interfaces");
 };
 typedef struct MarshalInterfaceDesc MarshalInterfaceDesc;
+struct MarshalInterfaceGroup
+{
+    MarshalInterfaceDesc Primary;
+    MarshalInterfaceDesc Entries[2];
+    const Char* Label DEFAULT_INITIALIZER("interface group");
+};
+typedef struct MarshalInterfaceGroup MarshalInterfaceGroup;
+
+struct MarshalRequiredInterfaceDesc
+{
+    IMarshalObject* pObject DEFAULT_INITIALIZER(nullptr);
+    // The pointer intentionally precedes its count.
+    IMarshalObject* const* ppObjects DEFAULT_INITIALIZER(nullptr);
+    Uint32 Count DEFAULT_INITIALIZER(0);
+};
+typedef struct MarshalRequiredInterfaceDesc MarshalRequiredInterfaceDesc;
+
 #include "DefineRefMacro.h"
 Uint64 DILIGENT_GLOBAL_FUNCTION(SumInterfaces)(const MarshalInterfaceDesc REF Desc);
 const MarshalInterfaceDesc REF DILIGENT_GLOBAL_FUNCTION(EchoInterfaces)(const MarshalInterfaceDesc REF Desc);
 const MarshalInterfaceDesc REF DILIGENT_GLOBAL_FUNCTION(GetInvalidInterfaceSnapshot)(const MarshalInterfaceDesc REF Desc);
 Uint64 DILIGENT_GLOBAL_FUNCTION(SumInterfaceArray)(IMarshalObject* const* ppObjects, Uint32 Count);
+IMarshalObject* const* DILIGENT_GLOBAL_FUNCTION(EchoInterfaceArray)(IMarshalObject* const* ppObjects, Uint32 Count);
+IMarshalObject* const* DILIGENT_GLOBAL_FUNCTION(GetRequiredInterfaceArray)(IMarshalObject* const* ppObjects, Uint32 Count);
+Bool DILIGENT_GLOBAL_FUNCTION(InterfaceArrayHasStorage)(IMarshalObject* const* ppObjects, Uint32 Count);
+const MarshalInterfaceGroup REF DILIGENT_GLOBAL_FUNCTION(EchoInterfaceGroup)(const MarshalInterfaceGroup REF Group, Bool InvalidLabel);
+const MarshalRequiredInterfaceDesc REF DILIGENT_GLOBAL_FUNCTION(EchoRequiredInterfaces)(const MarshalRequiredInterfaceDesc REF Desc);
+const MarshalRequiredInterfaceDesc REF DILIGENT_GLOBAL_FUNCTION(GetRequiredInterfaceSnapshot)(const MarshalInterfaceDesc REF Desc);
+void DILIGENT_GLOBAL_FUNCTION(CopyInterfaceArray)(IMarshalObject* const* ppObjects, Uint32 Count, IMarshalObject** ppOutput, Uint32 Capacity, Uint32 REF Written);
 #include "UndefRefMacro.h"
 
 // clang-format on

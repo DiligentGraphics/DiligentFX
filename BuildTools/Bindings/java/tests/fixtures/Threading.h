@@ -26,9 +26,13 @@
 
 #pragma once
 #include "Counters.h"
+#include "InterfaceFields.h"
 DILIGENT_BEGIN_NAMESPACE(Diligent)
-void   DILIGENT_GLOBAL_FUNCTION(ResetCounterCallGate)();
-Bool   DILIGENT_GLOBAL_FUNCTION(WaitForCounterCall)(Uint32 Milliseconds);
-void   DILIGENT_GLOBAL_FUNCTION(ReleaseCounterCall)();
+void   DILIGENT_GLOBAL_FUNCTION(ResetCallGate)();
+Bool   DILIGENT_GLOBAL_FUNCTION(WaitForCall)(Uint32 Milliseconds);
+void   DILIGENT_GLOBAL_FUNCTION(ReleaseCall)();
 Uint64 DILIGENT_GLOBAL_FUNCTION(ReadCounterBlocked)(ITestCounter* pCounter);
+#include "DefineRefMacro.h"
+Uint64 DILIGENT_GLOBAL_FUNCTION(SumInterfacesBlocked)(const MarshalInterfaceDesc REF Desc);
+#include "UndefRefMacro.h"
 DILIGENT_END_NAMESPACE

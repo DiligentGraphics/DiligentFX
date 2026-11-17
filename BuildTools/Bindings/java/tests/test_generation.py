@@ -162,6 +162,33 @@ class GenerationTest(unittest.TestCase):
                 with self.assertRaisesRegex(backend.ModelError, record + "::Name.*call lifetime"):
                     generate(model)
 
+    def test_rejects_retained_interface_arrays(self):
+        declaration(self.model, "SumInterfaceArray")["parameters"][0]["policy"]["lifetime"] = "object"
+        with self.assertRaisesRegex(backend.ModelError, "call lifetime"):
+            generate(self.model)
+
+    def test_rejects_retained_interface_fields(self):
+        for field_name in ("pObject", "ppObjects"):
+            with self.subTest(field=field_name):
+                model = deepcopy(MODEL)
+                field = next(f for f in declaration(model, "MarshalInterfaceDesc")["fields"] if f["name"] == field_name)
+                field["policy"]["lifetime"] = "object"
+                with self.assertRaisesRegex(backend.ModelError, field_name + ".*call lifetime"):
+                    generate(model)
+
+    def test_rejects_owned_interface_fields(self):
+        # Output-only snapshots cannot consume refs from the native descriptor.
+        self.model["declarations"] = [d for d in self.model["declarations"] if d["kind"] != "function"]
+        field = next(f for f in declaration(self.model, "MarshalInterfaceDesc")["fields"] if f["name"] == "pObject")
+        field["policy"]["ownership"] = "owned"
+        with self.assertRaisesRegex(backend.ModelError, "interface fields must borrow"):
+            generate(self.model)
+
+    def test_rejects_owned_interface_array_results(self):
+        declaration(self.model, "EchoInterfaceArray")["result"]["policy"]["ownership"] = "owned"
+        with self.assertRaisesRegex(backend.ModelError, "release adapter"):
+            generate(self.model)
+
     def test_output_only_borrowed_storage_can_have_object_lifetime(self):
         # The returned descriptor is copied while its native owner is still alive.
         self.model["declarations"] = [d for d in self.model["declarations"]

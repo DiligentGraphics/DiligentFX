@@ -106,6 +106,14 @@ class Generator(BindingAPI):
         except (ModelError, KeyError):
             return None
 
+    def interface_element(self, t):
+        pointer = unalias(t)
+        if pointer["kind"] == "pointer":
+            target = unalias(pointer["target"])
+            if self.types.get(target.get("name"), {}).get("kind") == "interface":
+                return target
+        return None
+
     def shape(self, value):
         t = unalias(value["type"])
         p = value.get("policy", {})
@@ -129,8 +137,8 @@ class Generator(BindingAPI):
             target = unalias(t["target"])
             if "length" in p:
                 info = self.scalar_info(target)
-                if not info or info[0] == "void":
-                    raise ModelError("Java: arrays currently require scalar or enum elements")
+                if (not info or info[0] == "void") and not self.interface_element(target):
+                    raise ModelError("Java: arrays currently require scalar, enum, or interface elements")
                 return "array", target
             if target.get("kind") == "scalar" and target.get("name") in ("char_s", "char_u") and target["const"]:
                 return "string", target
@@ -158,8 +166,9 @@ class Generator(BindingAPI):
             array_jni = jni + "Array" if self.shape({"type": t["element"]})[0] == "scalar" else "jobjectArray"
             return java + "[]", array_jni, "[" + sig, "Object"
         if kind == "array":
-            java, jni, sig, suffix = self.scalar_info(t)
-            return java + "[]", jni + "Array", "[" + sig, "Object"
+            java, jni, sig, suffix = self.info({"type": t})
+            array_jni = "jobjectArray" if self.interface_element(t) else jni + "Array"
+            return java + "[]", array_jni, "[" + sig, "Object"
         if kind == "string":
             return "java.lang.String", "jstring", "Ljava/lang/String;", "Object"
         name = self.short(t["name"])
@@ -232,6 +241,10 @@ class Generator(BindingAPI):
             return lines, ("*" if unalias(value["type"])["kind"] == "reference" else "") + var + ".Ptr"
         if count is None:
             raise ModelError("Java: array requires an explicit count")
+        element = self.interface_element(t)
+        if element:
+            return [f"InterfaceArray<{element['name']}> {var};",
+                    self.read_interface_array(value, element, expr, count, var)], var + ".Data()"
         java, jni, sig, suffix = self.scalar_info(t)
         native = mutable_type(t)
         # Required arrays normalize null with count zero to non-null empty storage.
@@ -246,6 +259,12 @@ class Generator(BindingAPI):
                 f"std::unique_ptr<{native}[]> {var}({allocation});",
                 f"for (jsize Index = 0; Index < {var}Count; ++Index)",
                 f"    {var}[Index] = ReadScalar<{native}>(Env, {var}Java[static_cast<size_t>(Index)]);"], var + ".get()"
+
+    def read_interface_array(self, value, element, expr, count, storage):
+        nullable = str(value.get("policy", {}).get("nullable", False)).lower()
+        element_nullable = str(value.get("policy", {}).get("element_nullable", False)).lower()
+        return (f'ReadInterfaceArray(Env, {expr}, {count}, {storage}, "{self.state_signature}", '
+                f'{nullable}, {element_nullable}, {self.interface_casts[element["name"]]});')
 
     def read_fixed_array(self, t, expr, destination, var, storage):
         count = t["count"]
@@ -326,18 +345,34 @@ class Generator(BindingAPI):
                 lines = []
                 if not value.get("policy", {}).get("nullable", False):
                     lines.append(f'Require(Env, {expr} != nullptr, "Native function returned a null descriptor");')
-                lines.append(f"const LocalRef<jobject> {var}{{Env, {expr} ? Write{short}(Env, *{expr}, {validate_required}) : nullptr}};")
+                lines.append(f"const LocalRef<jobject> {var}{{Env, {expr} ? Write{short}(Env, *{expr}, {validate_required}, Pending) : nullptr}};")
             else:
-                lines = [f"const LocalRef<jobject> {var}{{Env, Write{short}(Env, {expr}, {validate_required})}};"]
+                lines = [f"const LocalRef<jobject> {var}{{Env, Write{short}(Env, {expr}, {validate_required}, Pending)}};"]
             return lines, var + ".Get()"
         if kind == "interface":
             if t.get("const"):
                 raise ModelError("Java: const interface outputs are not implemented yet")
+            lines = []
             if owner is None:
-                raise ModelError("Java: interface output must have reference ownership")
-            return [f'const LocalRef<jobject> {var}{{Env, Pending.Wrap({owner}, "{self.path}${self.short(t["name"])}", "{self.state_signature}")}};'], var + ".Get()"
+                if value.get("policy", {}).get("ownership") != "borrowed":
+                    raise ModelError("Java: interface fields must borrow their native references")
+                nullable = str(value.get("policy", {}).get("nullable", False)).lower()
+                owner = var + "Owner"
+                lines = [f'Require(Env, !{validate_required} || {expr} != nullptr || {nullable}, "Native interface field is null");',
+                         f"Owned<{t['name']}> {owner};", f"{owner}.Ptr = {expr};",
+                         f"if ({owner}.Ptr) {owner}.Ptr->AddRef();"]
+            return lines + [f'const LocalRef<jobject> {var}{{Env, Pending.Wrap({owner}, "{self.path}${self.short(t["name"])}", "{self.state_signature}")}};'], var + ".Get()"
         if count is None:
             raise ModelError("Java: returned array requires an explicit count")
+        element = self.interface_element(t)
+        if element:
+            if element["const"]:
+                raise ModelError("Java: const interface outputs are not implemented yet")
+            nullable = str(value.get("policy", {}).get("nullable", False)).lower()
+            element_nullable = str(value.get("policy", {}).get("element_nullable", False)).lower()
+            return [f'const LocalRef<jobjectArray> {var}{{Env, WriteInterfaceArray(Env, {expr}, {count}, Pending, '
+                    f'"{self.path}${self.short(element["name"])}", "{self.state_signature}", '
+                    f'{nullable}, {element_nullable}, {validate_required})}};'], var + ".Get()"
         elem = self.scalar_info(t)
         nullable = value.get("policy", {}).get("nullable", False)
         allocation = f"Env->New{elem[3]}Array({var}Count)"
@@ -354,15 +389,23 @@ class Generator(BindingAPI):
     def emit_record(self, d):
         name, short = d["name"], self.short(d["name"])
         fields = self.record_fields(name)
-        read, write, storage = [], [], []
+        read_first, read_fields, write, storage = [], [], [], []
         for index, field in enumerate(fields):
             member = identifier(field["name"])
             kind, t = self.shape(field)
             java, jni, sig, suffix = self.info(field)
-            if kind not in ("scalar", "string", "record", "fixed_array") or unalias(field["type"])["kind"] == "reference":
+            if kind not in ("scalar", "string", "record", "fixed_array", "interface", "array") or unalias(field["type"])["kind"] == "reference":
                 raise ModelError(f"Java: unsupported descriptor field {name}::{member}")
             if kind == "record" and unalias(field["type"])["kind"] == "pointer":
                 raise ModelError("Java: descriptor pointer fields are not implemented yet")
+            if kind == "array" and not self.interface_element(t):
+                raise ModelError("Java: pointer-based descriptor array fields currently require interface elements")
+            # Read scalar counts and embedded descriptors before dependent array fields,
+            # even when the count is declared after the pointer in the native struct.
+            read = read_first if kind in ("scalar", "record") else read_fields
+            count = field.get("policy", {}).get("length")
+            read_count = str(count) if isinstance(count, int) else "Out.Value." + str(count)
+            write_count = str(count) if isinstance(count, int) else "Value." + str(count)
             read += [f'const jfieldID Field{index} = Field(Env, Object, "{member}", "{sig}");']
             getter = f"Env->Get{suffix}Field(Object, Field{index})"
             if kind == "scalar":
@@ -376,6 +419,16 @@ class Generator(BindingAPI):
                     read += [f'Require(Env, FieldValue{index}.Get() != nullptr || {nullable}, "Required string field is null");',
                              f"Out.Storage{index} = FieldValue{index}.Get() ? ReadString(Env, FieldValue{index}.Get()) : std::string{{}};",
                              f"Out.Value.{member} = FieldValue{index}.Get() ? Out.Storage{index}.c_str() : nullptr;"]
+                elif kind == "interface":
+                    nullable = str(field.get("policy", {}).get("nullable", False)).lower()
+                    storage.append(f"Owned<{t['name']}> Storage{index};")
+                    read += [f'ReadInterface(Env, FieldValue{index}.Get(), Out.Storage{index}, "{self.state_signature}", {nullable}, {self.interface_casts[t["name"]]});',
+                             f"Out.Value.{member} = Out.Storage{index}.Ptr;"]
+                elif kind == "array":
+                    element = self.interface_element(t)
+                    storage.append(f"InterfaceArray<{element['name']}> Storage{index};")
+                    read += [self.read_interface_array(field, element, f"FieldValue{index}.Get()", read_count, f"Out.Storage{index}"),
+                             f"Out.Value.{member} = Out.Storage{index}.Data();"]
                 elif kind == "fixed_array":
                     # Keep each descriptor element's strings alive through the native call.
                     # Heap-back the entire element storage so its duplicate native values
@@ -395,7 +448,7 @@ class Generator(BindingAPI):
                     # alive without duplicating its native value on the JVM stack.
                     storage.append(f"std::unique_ptr<Input{child}> Storage{index} = std::make_unique<Input{child}>();")
                     read += [f"Read{child}(Env, FieldValue{index}.Get(), *Out.Storage{index});", f"Out.Value.{member} = Out.Storage{index}->Value;"]
-            lines, expr = self.write(field, "Value." + member, "FieldValue" + str(index), validate_required="ValidateRequiredFields")
+            lines, expr = self.write(field, "Value." + member, "FieldValue" + str(index), count=write_count if kind == "array" else None, validate_required="ValidateRequiredFields")
             write += [f'const jfieldID Field{index} = Field(Env, Object, "{member}", "{sig}");'] + lines
             write += [f"Env->Set{suffix}Field(Object, Field{index}, {expr});", "Check(Env);"]
         self.cpp.append(f'''struct Input{short}
@@ -406,24 +459,26 @@ class Generator(BindingAPI):
 [[maybe_unused]] static inline void Read{short}(JNIEnv* Env, jobject Object, Input{short}& Out)
 {{
     Require(Env, Object != nullptr, "Required descriptor is null");
-{self.indent(read, 4)}
+{self.indent(read_first + read_fields, 4)}
 }}
-static inline void Write{short}Fields(JNIEnv* Env, jobject Object, const {name}& Value, bool ValidateRequiredFields)
+static inline void Write{short}Fields(JNIEnv* Env, jobject Object, const {name}& Value, bool ValidateRequiredFields, Transfers& Pending)
 {{
     (void)ValidateRequiredFields;
+    (void)Pending;
 {self.indent(write, 4)}
 }}
-[[maybe_unused]] static inline jobject Write{short}(JNIEnv* Env, const {name}& Value, bool ValidateRequiredFields)
+[[maybe_unused]] static inline jobject Write{short}(JNIEnv* Env, const {name}& Value, bool ValidateRequiredFields, Transfers& Pending)
 {{
     jobject Object = NewObject(Env, "{self.path}${short}", true);
-    Write{short}Fields(Env, Object, Value, ValidateRequiredFields);
+    Write{short}Fields(Env, Object, Value, ValidateRequiredFields, Pending);
     return Object;
 }}
 ''')
         # Native defaults may be incomplete until the caller fills in required
         # fields. Ordinary inputs and returned snapshots remain strict.
         default = self.native_method(SCALARS["void"], [(short, "jobject", "Object")],
-                                     [f"ValueStorage<{name}> Defaults;", f"Write{short}Fields(Env, Object, Defaults.Get(), false);"])
+                                     [f"ValueStorage<{name}> Defaults;", "Transfers Pending{Env};",
+                                      f"Write{short}Fields(Env, Object, Defaults.Get(), false, Pending);", "Pending.Commit();"])
         bases = d.get("bases", [])
         parent = " extends " + self.short(bases[0]) if bases else ""
         final = "" if name in self.record_bases else "final "

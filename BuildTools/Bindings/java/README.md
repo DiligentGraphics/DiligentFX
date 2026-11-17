@@ -18,7 +18,8 @@ Generated sources are build artifacts. `generate.py` accepts `--model`, `--modul
 - Scalar constants become Java `static final` compile-time constants. Integer,
   boolean, floating-point, and enum values use the same Java types as parameters;
   Uint64 constants preserve all bits in a signed Java `long`.
-- Descriptors with scalar, string, and nested descriptor fields, preserving
+- Descriptors with scalar, string, interface, interface-array, and nested
+  descriptor fields, preserving
   single inheritance and covariant interface returns. Construction
   obtains defaults from native C++ initialization, including incomplete defaults
   with null required fields. Required fields are checked when a descriptor is
@@ -29,7 +30,7 @@ Generated sources are build artifacts. `generate.py` accepts `--model`, `--modul
   the descriptor, with descriptor-element strings retained for the native call.
 - Ordinary UTF-8 strings, copied between native storage and Java UTF-16 strings.
   Nullability follows the model. Embedded NUL and invalid encodings are rejected.
-- Copied scalar/enum input arrays, borrowed array results, and caller-filled
+- Copied scalar/enum/interface input arrays, borrowed array results, and caller-filled
   output arrays with explicit capacity and optional written count.
 - Scalar and descriptor output pointers/references, and multiple outputs.
 - Reference-counted interfaces with single inheritance, owned and borrowed
@@ -64,7 +65,12 @@ throws `IllegalStateException`. Borrowed results acquire their own reference.
 A Cleaner is a fallback for forgotten wrappers. JNI retains interface arguments
 for the duration of each call, including when another thread closes the wrapper.
 This protects lifetime; it does not change the native API's threading contract.
-If result conversion fails, all owned outputs are released before returning.
+Interface fields and array elements in returned snapshots each acquire their own
+reference, even when several refer to the same native object. Close each returned
+wrapper; the containing descriptor or array does not implement `AutoCloseable`.
+Input descriptor fields and array elements are retained for the full JNI call.
+If conversion fails partway through a snapshot, including nested descriptors and
+arrays, every reference acquired for that snapshot is released before returning.
 
 `object.QueryInterface(IMutable.class)` uses the selected interface's native IID
 and returns a typed, independently owned wrapper, or null if unsupported. Close
@@ -76,7 +82,7 @@ original wrapper's ownership.
 
 This first backend does not yet cover the entire JavaScript surface. Unsupported
 shapes fail generation: callbacks, scoped byte access, multiple interface bases,
-interface/pointer descriptor fields, pointer-based struct/interface arrays,
+descriptor-pointer fields, pointer-based struct arrays and scalar-array fields,
 read-only fixed-array fields, computed counts, inout parameters, and non-scalar
 constant exports. Native default arguments may be present, but Java callers
 currently supply every input argument.

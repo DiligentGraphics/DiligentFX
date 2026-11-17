@@ -234,6 +234,90 @@
           "ownership": "borrowed"
         }
       }
+    },
+    "Diligent::MarshalInterfaceDesc": {
+      "fields": {
+        "ppObjects": {
+          "length": "Count",
+          "element_nullable": true
+        },
+        "Label": {
+          "nullable": false
+        }
+      }
+    },
+    "Diligent::SumInterfaceArray": {
+      "parameters": {
+        "ppObjects": {
+          "length": "Count",
+          "element_nullable": true
+        }
+      }
+    },
+    "Diligent::EchoInterfaceArray": {
+      "parameters": {
+        "ppObjects": {
+          "length": "Count",
+          "element_nullable": true
+        }
+      },
+      "result": {
+        "length": "Count",
+        "element_nullable": true
+      }
+    },
+    "Diligent::GetRequiredInterfaceArray": {
+      "parameters": {
+        "ppObjects": {
+          "length": "Count",
+          "element_nullable": true
+        }
+      },
+      "result": {
+        "length": "Count",
+        "element_nullable": false
+      }
+    },
+    "Diligent::InterfaceArrayHasStorage": {
+      "parameters": {
+        "ppObjects": {
+          "length": "Count",
+          "element_nullable": true
+        }
+      }
+    },
+    "Diligent::MarshalRequiredInterfaceDesc": {
+      "fields": {
+        "pObject": {
+          "nullable": false
+        },
+        "ppObjects": {
+          "length": "Count",
+          "nullable": false
+        }
+      }
+    },
+    "Diligent::MarshalInterfaceGroup": {
+      "fields": {
+        "Label": {
+          "nullable": false
+        }
+      }
+    },
+    "Diligent::CopyInterfaceArray": {
+      "parameters": {
+        "ppObjects": {
+          "length": "Count",
+          "element_nullable": true
+        },
+        "ppOutput": {
+          "length": "Capacity",
+          "written": "Written",
+          "ownership": "borrowed",
+          "lifetime": "call",
+          "element_nullable": true
+        }
+      }
     }
   }
 }

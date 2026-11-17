@@ -9,6 +9,16 @@ from support import build_fixture, function_config
 
 
 class BindingAPITest(unittest.TestCase):
+    def test_pointer_constness_is_not_pointee_constness(self):
+        value = {"kind": "named", "name": "Diligent::IObject", "const": False, "volatile": False}
+        pointer = {"kind": "pointer", "target": value, "const": True, "volatile": False}
+        self.assertEqual(cpp_type(pointer), "Diligent::IObject* const")
+        array = {"kind": "pointer", "target": pointer, "const": False, "volatile": False}
+        self.assertEqual(cpp_type(array), "Diligent::IObject* const*")
+        pointer["const"] = False
+        value["const"] = True
+        self.assertEqual(cpp_type(array), "const Diligent::IObject**")
+
     @classmethod
     def setUpClass(cls):
         config = function_config()

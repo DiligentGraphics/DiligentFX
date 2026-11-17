@@ -15,7 +15,7 @@ public final class ConcurrentCloseTest {
             ITestCounter counter = CreateCounter(0xFEDCBA9876543210L, TEST_STATUS.TEST_STATUS_OK).ppCounter;
             AtomicLong result = new AtomicLong();
             AtomicReference<Throwable> error = new AtomicReference<>();
-            ResetCounterCallGate();
+            ResetCallGate();
             Thread reader = new Thread(() -> {
                 try {
                     result.set(ReadCounterBlocked(counter));
@@ -39,7 +39,7 @@ public final class ConcurrentCloseTest {
             closer.setDaemon(true);
             try {
                 reader.start();
-                check(WaitForCounterCall(10000));
+                check(WaitForCall(10000));
                 closer.start();
                 try {
                     check(closed.await(10, TimeUnit.SECONDS));
@@ -51,7 +51,7 @@ public final class ConcurrentCloseTest {
                 equal(1L, GetLiveCounterCount());
                 equal(destroyed, GetDestroyedCounterCount());
             } finally {
-                ReleaseCounterCall();
+                ReleaseCall();
                 try {
                     reader.join(10000);
                     closer.join(10000);

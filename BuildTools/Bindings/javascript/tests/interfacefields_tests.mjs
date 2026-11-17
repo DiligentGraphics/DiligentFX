@@ -50,4 +50,82 @@ export function registerTests({test, assert, api}) {
             assert.equal(retained.GetRefCount(), 1);
         } finally { retained.dispose(); }
     });
+    test("borrowed interface arrays retain elements and allow empty inputs", () => {
+        const baseline = api.GetLiveObjectCount();
+        const object = api.CreateMarshalObject({Size: 17n}, 0, false).value;
+        let result, copied;
+        try {
+            assert.equal(api.InterfaceArrayHasStorage([object], 1), true);
+            result = api.EchoInterfaceArray([object, null, object], 3);
+            assert.equal(result.length, 3);
+            assert.equal(result[0] === result[2], false);
+            assert.equal(result[1], null);
+            assert.equal(object.GetRefCount(), 3);
+            assert.deepEqual(api.EchoInterfaceArray([], 0), []);
+            assert.equal(api.EchoInterfaces({}).ppObjects, null);
+            copied = api.CopyInterfaceArray([object, null, object], 3, 2);
+            assert.equal(copied.Written, 2);
+            assert.equal(copied.ppOutput.length, 2);
+            assert.equal(copied.ppOutput[1], null);
+            assert.equal(object.GetRefCount(), 4);
+            object.dispose();
+            assert.equal(result[2].GetSize(), 17n);
+            assert.equal(copied.ppOutput[0].GetSize(), 17n);
+        } finally {
+            object.dispose();
+            for (const entry of result ?? []) entry?.dispose();
+            for (const entry of copied?.ppOutput ?? []) entry?.dispose();
+        }
+        assert.equal(api.GetLiveObjectCount(), baseline);
+    });
+    test("required interface fields and array elements validate after reading the count", () => {
+        const baseline = api.GetLiveObjectCount();
+        const object = api.CreateMarshalObject({Size: 31n}, 0, false).value;
+        let result;
+        try {
+            assert.throws(() => api.EchoRequiredInterfaces({pObject: null}), TypeError);
+            const input = {pObject: object, ppObjects: [object, null], Count: 2};
+            assert.throws(() => api.EchoRequiredInterfaces(input), TypeError);
+            assert.throws(() => api.GetRequiredInterfaceSnapshot(input), /null interface/);
+            assert.throws(() => api.GetRequiredInterfaceArray(input.ppObjects, 2), /null interface/);
+            assert.equal(object.GetRefCount(), 1);
+            result = api.EchoRequiredInterfaces({...input, Count: 1});
+            assert.equal(result.ppObjects.length, 1);
+            assert.equal(result.ppObjects[0].GetSize(), 31n);
+            assert.equal(result.pObject.GetSize(), 31n);
+        } finally {
+            result?.pObject.dispose();
+            for (const entry of result?.ppObjects ?? []) entry?.dispose();
+            object.dispose();
+        }
+        assert.equal(api.GetLiveObjectCount(), baseline);
+    });
+    test("nested interface snapshots share rollback through fixed descriptor arrays", () => {
+        const baseline = api.GetLiveObjectCount();
+        const object = api.CreateMarshalObject({Size: 43n}, 0, false).value;
+        const group = {
+            Primary: {pObject: object, ppObjects: [object], Count: 1},
+            Entries: [{pObject: object, ppObjects: [object, null], Count: 2},
+                      {ppObjects: [object], Count: 1}],
+        };
+        let snapshot;
+        try {
+            assert.throws(() => api.EchoInterfaceGroup(group, true), TypeError);
+            assert.equal(object.GetRefCount(), 1);
+            snapshot = api.EchoInterfaceGroup(group, false);
+            assert.equal(object.GetRefCount(), 6);
+            object.dispose();
+            assert.equal(snapshot.Primary.pObject.GetSize(), 43n);
+            assert.equal(snapshot.Entries[1].ppObjects[0].GetSize(), 43n);
+            assert.equal(snapshot.Entries[0].ppObjects[1], null);
+            assert.equal(snapshot.Label, "interface group");
+        } finally {
+            object.dispose();
+            for (const desc of snapshot ? [snapshot.Primary, ...snapshot.Entries] : []) {
+                desc.pObject?.dispose();
+                for (const entry of desc.ppObjects ?? []) entry?.dispose();
+            }
+        }
+        assert.equal(api.GetLiveObjectCount(), baseline);
+    });
 }
