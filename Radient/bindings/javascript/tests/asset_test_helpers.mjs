@@ -43,5 +43,11 @@ export function createAssetFixture(t, api, assert, constants, testData) {
             ...extra,
         };
     }
-    return {...fixture, data, manager, keep, blob, asset, ready, triangle};
+    function morphTarget(deltas, offset) {
+        return {
+            Desc: {AttributeCount: 1, pAttributes: [{Semantic: constants.RadientMorphTargetPositionSemantic, ComponentCount: 3}]},
+            pAttributeData: [{pDeltaBuffer: deltas, ByteOffset: offset}],
+        };
+    }
+    return {...fixture, data, manager, keep, blob, asset, ready, triangle, morphTarget};
 }

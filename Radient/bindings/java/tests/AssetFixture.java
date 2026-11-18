@@ -109,6 +109,20 @@ final class AssetFixture implements AutoCloseable {
         return info;
     }
 
+    RadientMorphTargetCreateInfo morphTarget(IRadientDataBlob deltas, long offset) {
+        RadientMorphTargetCreateInfo target = new RadientMorphTargetCreateInfo();
+        RadientMorphTargetAttributeDesc attribute = new RadientMorphTargetAttributeDesc();
+        attribute.Semantic = RadientMorphTargetPositionSemantic;
+        attribute.ComponentCount = 3;
+        target.Desc.pAttributes = new RadientMorphTargetAttributeDesc[]{attribute};
+        target.Desc.AttributeCount = 1;
+        RadientMorphTargetAttributeCreateInfo data = new RadientMorphTargetAttributeCreateInfo();
+        data.pDeltaBuffer = deltas;
+        data.ByteOffset = offset;
+        target.pAttributeData = new RadientMorphTargetAttributeCreateInfo[]{data};
+        return target;
+    }
+
     RadientTextureData textureData(long width, long height, short format, byte[] bytes) {
         RadientTextureData data = new RadientTextureData();
         data.Width = width;

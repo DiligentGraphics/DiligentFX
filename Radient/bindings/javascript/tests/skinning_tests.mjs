@@ -5,14 +5,18 @@ export function registerTests({test, assert, api, constants, testData}) {
         RADIENT_STATUS_INVALID_ARGUMENT: INVALID} = constants.RADIENT_STATUS;
     test("skeleton and skin descriptors, pose arrays and computed skinning outputs round-trip", t => {
         const f = createAssetFixture(t, api, assert, constants, testData);
-        const joints = [{Name: "Root", LocalRestTransform: {Position: {x: 1}}},
-            {Name: "Child", ParentJointIndex: 0, LocalRestTransform: {Position: {y: 2}}}];
-        const skeleton = f.keep(f.value(f.manager.CreateSkeleton({Name: "Rig 世界", JointCount: 2, pJoints: joints})));
+        const joints = [
+            {Name: f.data.string("skinning.rootName"),
+                LocalRestTransform: {Position: {x: f.data.vector("skinning.rootPosition").x}}},
+            {Name: f.data.string("skinning.childName"), ParentJointIndex: 0,
+                LocalRestTransform: {Position: {y: f.data.vector("skinning.childPosition").y}}},
+        ];
+        const skeleton = f.keep(f.value(f.manager.CreateSkeleton({Name: f.data.string("skinning.skeletonName"), JointCount: 2, pJoints: joints})));
         joints[1].Name = "changed";
-        assert.equal(skeleton.GetDesc().pJoints[1].Name, "Child");
+        assert.equal(skeleton.GetDesc().pJoints[1].Name, f.data.string("skinning.childName"));
         assert.equal(skeleton.GetDesc().pJoints[0].ParentJointIndex, constants.InvalidRadientJointIndex);
-        const inverse = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, -2, 0, 1]);
-        const skin = f.keep(f.value(f.manager.CreateSkin({Name: "Skin", pSkeleton: skeleton,
+        const inverse = new Float32Array(f.data.numbers("skinning.inverseBind"));
+        const skin = f.keep(f.value(f.manager.CreateSkin({Name: f.data.string("skinning.skinName"), pSkeleton: skeleton,
             JointCount: 1, pJoints: [{SkeletonJointIndex: 1, InverseBindMatrix: {Data: inverse}}]})));
         const skinDesc = skin.GetDesc();
         f.keep(skinDesc.pSkeleton);
@@ -23,13 +27,13 @@ export function registerTests({test, assert, api, constants, testData}) {
         const writer = f.keep(f.value(pose.CreateWriter()));
         skeleton.dispose();
         assert.equal(retainedSkeleton.GetDesc().JointCount, 2);
-        assert.equal(f.value(pose.GetJointLocalTransforms(0, 2))[1].Position.y, 2);
-        assert.equal(f.value(pose.GetJointGlobalMatrices(0, 2))[1].Data[12], 1);
+        assert.equal(f.value(pose.GetJointLocalTransforms(0, 2))[1].Position.y, f.data.vector("skinning.childPosition").y);
+        assert.equal(f.value(pose.GetJointGlobalMatrices(0, 2))[1].Data[12], f.data.vector("skinning.rootPosition").x);
         assert.equal(f.value(pose.ComputeSkinningMatrices(skin)).length, 1); // Native JointCount query.
         const initialVersion = pose.GetVersion();
-        const transforms = [{Position: {x: 4}}];
+        const transforms = [{Position: {x: f.data.vector("skinning.updatedPosition").x}}];
         assert.equal(writer.SetJointLocalTransforms(0, 1, transforms), OK);
-        transforms[0].Position.x = 100;
+        transforms[0].Position.x = f.data.number("skinning.mutatedRootX");
         assert.equal(writer.Commit(false), OK);
         assert.equal(pose.GetVersion(), initialVersion);
         assert.equal(pose.GetJointGlobalMatrices(0, 2).status, PENDING);
@@ -37,13 +41,13 @@ export function registerTests({test, assert, api, constants, testData}) {
         assert.equal(pose.UpdateGlobalTransforms(), OK);
         assert.ok(pose.GetVersion() > initialVersion);
         const matrices = f.value(pose.ComputeSkinningMatrices(skin));
-        assert.equal(matrices[0].Data[12], 4);
-        assert.equal(matrices[0].Data[13], 0);
-        assert.equal(f.value(pose.ComputeSkinningMatrices(skin, true))[0].Data[3], 4);
+        assert.equal(matrices[0].Data[12], f.data.vector("skinning.skinnedPosition").x);
+        assert.equal(matrices[0].Data[13], f.data.vector("skinning.skinnedPosition").y);
+        assert.equal(f.value(pose.ComputeSkinningMatrices(skin, true))[0].Data[3], f.data.vector("skinning.skinnedPosition").x);
         assert.equal(pose.UpdateGlobalTransforms(), NO_CHANGE);
         assert.equal(writer.ResetToRestPose(), OK);
         assert.equal(writer.Commit(true), OK);
-        assert.equal(f.value(pose.GetJointLocalTransforms(0, 1))[0].Position.x, 1);
+        assert.equal(f.value(pose.GetJointLocalTransforms(0, 1))[0].Position.x, f.data.vector("skinning.rootPosition").x);
         assert.equal(writer.Commit(true), NO_CHANGE);
         assert.equal(writer.SetJointLocalTransforms(0, 0, null), NO_CHANGE);
         assert.equal(pose.GetJointLocalTransforms(2, 1).status, INVALID);

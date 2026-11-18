@@ -14,11 +14,15 @@ their respective test files; test operations are not moved behind native helpers
 | `TextureTest.java` | `texture_tests.mjs` | 4: supplied mip chains and blob ownership, mip generation, encoded images, invalid inputs/active writers |
 | `MaterialTest.java` | `material_tests.mjs` | 2: parameter reflection/defaults, definition/material/scene binding ownership |
 | `MaterialEditTest.java` | `material_edit_tests.mjs` | 2: copied writer bytes and surface changes, texture initialization and edit restrictions |
+| `AnimationTest.java` | `animation_tests.mjs` | 4: sampler copies and scene evaluation, registry removal/retention, quaternion outputs, material/pose/morph destinations |
+| `MorphTest.java` | `morph_tests.mjs` | 1: delta blobs and offsets, mutable weight snapshots/versioning, validation/defaults, scene-component lifetimes |
+| `SkinningTest.java` | `skinning_tests.mjs` | 2: descriptor copies and pose arrays, deferred commits/versioning, skinning/transpose/defaults/validation, retained scene skin/pose |
 | `ImportTest.java` | `import_tests.mjs` | 3: GLB animation and instantiation, OBJ with relative MTL, unsupported importer outputs |
 
 [`fixtures.properties`](fixtures.properties) supplies the byte patterns, UTF-8
 names, transform inputs and expected matrix, resource configuration, and component
-values to both implementations, along with mesh, texture, material, and import expectations. It uses plain UTF-8 `key=value` lines and
+values to both implementations, along with mesh, texture, material, animation,
+morph, skinning, and import expectations. It uses plain UTF-8 `key=value` lines and
 comma-separated numeric lists, without escapes or continuations. Java reads it
 with the JDK's `Properties.load(Reader)`; the JS helper reads the same subset.
 Every array/descriptor accessor returns a fresh value so mutation tests do not
@@ -30,7 +34,7 @@ Node runner loads it directly. Browser CTest commands use `--test-data` to pass
 the identical text to the suite. Missing fixtures fail the test rather than use
 fallback values.
 
-The 34 Java cases match their JavaScript counterparts. `AssetFixture.java` and
+The 41 Java cases match their JavaScript counterparts. `AssetFixture.java` and
 `asset_test_helpers.mjs` create the same triangle, retain returned interfaces,
 and poll CPU load status for up to 15 seconds, accepting both `OK` and `PENDING`
 when work is submitted. These tests create no GPU and never wait for uploads.
@@ -65,8 +69,9 @@ Intentional language-specific coverage:
   checks that native-only fields and release methods are absent. Native `Uint64`
   values use Java `long` bits; negative values in widened `Uint32` fields are
   rejected, while `-1L` in `Uint64` means `UINT64_MAX`.
-- Java explicitly passes the native `KeepWorldTransform=true` default; JS also
-  tests omission of that argument. Java checks native-initialized descriptor
+- Java explicitly passes the native `KeepWorldTransform=true` and skinning
+  `TransposeMatrices=false`/`UpdateGlobalMatrices=true` defaults; JS also
+  tests omission of these arguments. Java checks native-initialized descriptor
   constructors before the same values round-trip through the scene.
 - Java uses try-with-resources for the processing-failure case; JS uses `finally`.
   Both verify that write access was released and the written byte remains visible.
@@ -75,6 +80,12 @@ The original Java checks for retained base interfaces, mutable empty reads and
 growth, a retained writer copying byte 255, visibility restoration, and removal
 of edited components are retained and also exercised in JavaScript.
 
-The standalone skinning, morph, animation, renderer, and export suites remain
-JavaScript-only for now; imported animation is covered by `ImportTest`.
+Animation clips share their times, sample values, schema/property names from the
+API, and expected results. Java mutates the actual submitted `byte[]` after clip
+creation, matching JS's mutation of the float view over those bytes. Morph tests
+share weights and delta values; skinning tests share joint transforms and the
+inverse-bind matrix. The helpers only construct descriptors and invoke public
+bindings; evaluation, deferred propagation, and lifetime assertions stay in Java/JS.
+
+The renderer and export suites remain JavaScript-only for now.
 Extend this mapping when their existing cases are ported to Java.
