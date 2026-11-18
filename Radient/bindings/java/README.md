@@ -77,7 +77,7 @@ for unsigned integer mappings and other marshalling and ownership rules.
 ## Integration coverage
 
 The tests in `tests/` use real Radient objects and print each case to the console.
-They run with `-Xcheck:jni` and require no GPU or browser. The 20 cases mirror the
+They run with `-Xcheck:jni` and require no GPU or browser. The 34 cases mirror the
 existing JavaScript suites, using the same input and expected-value
 [fixtures](../tests/integration/README.md). CTest supplies the fixture path.
 
@@ -87,6 +87,12 @@ existing JavaScript suites, using the same input and expected-value
   matrix outputs, transform revisions, reparenting, visibility, and retained scenes.
 - `ComponentsTest`: camera/light defaults, setters, independent snapshots,
   component presence, removal, and native status propagation.
+- `MeshTest` and `TextureTest`: asynchronous CPU loading, source blob lifetimes,
+  layout/mip reflection, procedural helpers, encoded decoding, and validation.
+- `MaterialTest` and `MaterialEditTest`: reflection/defaults, retained assets,
+  shader/surface writes, texture initialization, and rejected later texture edits.
+- `ImportTest`: shared GLB and OBJ/MTL fixtures, scene instantiation, imported
+  animation evaluation, relative dependencies, and unsupported importer failures.
 
 These tests verify production integration rather than repeat the full native test
 suite. Exhaustive marshalling and failure cleanup remain in the

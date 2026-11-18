@@ -1,6 +1,8 @@
+import {readFixtures} from "./fixtures.mjs";
 import {createSceneFixture} from "./scene_test_helpers.mjs";
 
-export function createAssetFixture(t, api, assert, constants) {
+export function createAssetFixture(t, api, assert, constants, testData) {
+    const data = readFixtures(testData);
     const {RADIENT_STATUS_OK: OK, RADIENT_STATUS_PENDING: PENDING} = constants.RADIENT_STATUS;
     const fixture = createSceneFixture(t, api, assert, OK);
     const owned = [];
@@ -26,9 +28,9 @@ export function createAssetFixture(t, api, assert, constants) {
         return object;
     }
     function triangle(extra = {}) {
-        const positions = blob(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]));
+        const positions = blob(new Float32Array(data.numbers("mesh.positions")));
         return {
-            Name: "Triangle 世界",
+            Name: data.string("mesh.name"),
             VertexData: {
                 VertexCount: 3,
                 ppVertexBuffers: [positions],
@@ -37,9 +39,9 @@ export function createAssetFixture(t, api, assert, constants) {
                     AttributeCount: 1, pBuffers: [{}], BufferCount: 1,
                 },
             },
-            pPrimitives: [{Name: "Face", ElementCount: 3}], PrimitiveCount: 1,
+            pPrimitives: [{Name: data.string("mesh.primitiveName"), ElementCount: 3}], PrimitiveCount: 1,
             ...extra,
         };
     }
-    return {...fixture, manager, keep, blob, asset, ready, triangle};
+    return {...fixture, data, manager, keep, blob, asset, ready, triangle};
 }

@@ -1,41 +1,30 @@
 import {createAssetFixture} from "./asset_test_helpers.mjs";
-import {makeAnimatedTriangleGLB, sceneEntities} from "./import_test_helpers.mjs";
+import {sceneEntities} from "./import_test_helpers.mjs";
 
-const encode = text => new TextEncoder().encode(text);
-export const moduleOptions = {files: {
-    "/assets/animated.glb": makeAnimatedTriangleGLB(),
-    "/assets/obj/triangle.obj": encode(`mtllib triangle.mtl
-o Triangle
-v 0 0 0
-v 1 0 0
-v 0 1 0
-usemtl Green
-f 1 2 3
-`),
-    "/assets/obj/triangle.mtl": encode("newmtl Green\nKd 0.1 0.8 0.2\n"),
-}};
+// Both bindings read these exact files. The JS runners preload them into MEMFS.
+export const assetFiles = ["animated.glb", "obj/triangle.obj", "obj/triangle.mtl"];
 
-export function registerTests({test, assert, api, constants}) {
+export function registerTests({test, assert, api, constants, testData}) {
     const {RADIENT_STATUS_OK: OK, RADIENT_STATUS_PENDING: PENDING, RADIENT_STATUS_UNSUPPORTED: UNSUPPORTED} = constants.RADIENT_STATUS;
 
     test("GLB loading exposes clips and instantiates hierarchy, meshes, and animation bindings", async t => {
-        const f = createAssetFixture(t, api, assert, constants);
+        const f = createAssetFixture(t, api, assert, constants, testData);
         const asset = await f.ready(f.asset(f.manager.LoadScene({URI: "/assets/animated.glb"})));
         assert.equal(asset.GetType(), constants.RADIENT_ASSET_TYPE.RADIENT_ASSET_TYPE_SCENE);
         const desc = asset.GetDesc();
         assert.equal(desc.AnimationClipCount, 1);
         desc.ppAnimationClips.forEach(f.keep);
-        assert.equal(desc.ppAnimationClips[0].GetDesc().Name, "Move");
+        assert.equal(desc.ppAnimationClips[0].GetDesc().Name, f.data.string("import.clipName"));
         const importer = f.keep(f.value(f.engine.CreateSceneImporter(f.writer)));
         const registry = f.keep(f.value(f.engine.CreateAnimationRegistry(f.scene)));
         const root = f.value(importer.InstantiateScene(asset, {
-            Name: "Instance 世界", RootTransform: {Position: {x: 10}}, pAnimationRegistry: registry,
+            Name: f.data.string("import.instanceName"), RootTransform: {Position: {x: f.data.number("import.rootX")}}, pAnimationRegistry: registry,
             SceneIndex: constants.InvalidRadientSceneIndex,
         }));
         assert.equal(importer.ProcessPendingImports(), OK);
-        assert.equal(f.value(f.scene.GetEntityName(root)), "Instance 世界");
+        assert.equal(f.value(f.scene.GetEntityName(root)), f.data.string("import.instanceName"));
         const entities = sceneEntities(f, root);
-        const node = entities.find(entity => f.value(f.scene.GetEntityName(entity)) === "Animated triangle 世界");
+        const node = entities.find(entity => f.value(f.scene.GetEntityName(entity)) === f.data.string("import.nodeName"));
         assert.ok(node !== undefined);
         const meshEntity = entities.find(entity => f.value(f.scene.HasComponent(entity, constants.RADIENT_COMPONENT_TYPE_MESH)));
         assert.ok(meshEntity !== undefined);
@@ -51,19 +40,19 @@ export function registerTests({test, assert, api, constants}) {
             f.keep(entry.pClip);
             for (const binding of entry.ppBindings) {
                 f.keep(binding);
-                assert.equal(binding.Evaluate({Time: 0.5}), OK);
+                assert.equal(binding.Evaluate({Time: f.data.number("import.time")}), OK);
             }
         }
-        assert.equal(f.value(f.scene.GetLocalTransform(node)).Position.x, 1);
-        assert.equal(f.value(f.scene.GetWorldMatrix(node)).Data[12], 11);
+        assert.equal(f.value(f.scene.GetLocalTransform(node)).Position.x, f.data.number("import.localX"));
+        assert.equal(f.value(f.scene.GetWorldMatrix(node)).Data[12], f.data.number("import.worldX"));
         asset.dispose();
-        assert.equal(desc.ppAnimationClips[0].GetDesc().Duration, 1);
+        assert.equal(desc.ppAnimationClips[0].GetDesc().Duration, f.data.number("import.duration"));
     });
 
     test("OBJ ImportScene marshals both outputs and resolves a relative material library", async t => {
-        const f = createAssetFixture(t, api, assert, constants);
+        const f = createAssetFixture(t, api, assert, constants, testData);
         const importer = f.keep(f.value(f.engine.CreateSceneImporter(f.writer)));
-        const result = importer.ImportScene({URI: "/assets/obj/triangle.obj", ImporterId: "obj"}, {Name: "OBJ instance"});
+        const result = importer.ImportScene({URI: "/assets/obj/triangle.obj", ImporterId: "obj"}, {Name: f.data.string("import.objInstanceName")});
         assert.ok(result.status === OK || result.status === PENDING);
         const {ppScene: asset, RootEntity: root} = result.value;
         f.keep(asset);
@@ -84,11 +73,11 @@ export function registerTests({test, assert, api, constants}) {
         const definition = f.keep(material.GetDefinition());
         const handle = f.value(definition.FindParameter(constants.RadientStandardMaterialDiffuseFactorName));
         const value = new Float32Array(f.value(material.GetParameter(handle, 16)).buffer);
-        assert.ok(Math.abs(value[1] - 0.8) < 1e-6);
+        assert.ok(Math.abs(value[1] - f.data.number("import.objGreen")) < 1e-6);
     });
 
     test("unsupported importers return empty outputs without adding an entity", t => {
-        const f = createAssetFixture(t, api, assert, constants);
+        const f = createAssetFixture(t, api, assert, constants, testData);
         const importer = f.keep(f.value(f.engine.CreateSceneImporter(f.writer)));
         const result = importer.ImportScene({URI: "/assets/animated.glb", ImporterId: "missing"}, {});
         assert.equal(result.status, UNSUPPORTED);

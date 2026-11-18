@@ -1,9 +1,9 @@
 import {createAssetFixture} from "./asset_test_helpers.mjs";
 
-export function registerTests({test, assert, api, constants}) {
+export function registerTests({test, assert, api, constants, testData}) {
     const {RADIENT_STATUS_OK: OK, RADIENT_STATUS_NOT_FOUND: NOT_FOUND, RADIENT_STATUS_INVALID_ARGUMENT: INVALID} = constants.RADIENT_STATUS;
     test("material definitions expose parameter names, handles, types and copied defaults", t => {
-        const f = createAssetFixture(t, api, assert, constants);
+        const f = createAssetFixture(t, api, assert, constants, testData);
         const definition = f.keep(f.value(f.manager.CreateStandardMaterialDefinition({})));
         assert.equal(definition.GetStatus(), OK);
         const desc = definition.GetDesc();
@@ -15,7 +15,7 @@ export function registerTests({test, assert, api, constants}) {
         const parameter = definition.GetParameterDesc(handle.Index);
         assert.equal(parameter.Name, name);
         assert.equal(parameter.Type, constants.RADIENT_MATERIAL_PARAMETER_TYPE.RADIENT_MATERIAL_PARAMETER_TYPE_FLOAT4);
-        assert.deepEqual(Array.from(new Float32Array(parameter.pDefaultValue.buffer)), [1, 1, 1, 1]);
+        assert.deepEqual(Array.from(new Float32Array(parameter.pDefaultValue.buffer)), f.data.numbers("material.defaultColor"));
         assert.equal(parameter.pDefaultTexture, null);
         assert.equal(definition.FindParameter("missing parameter").status, NOT_FOUND);
         assert.equal(definition.GetParameterHandle(0xffffffff).status, INVALID);
@@ -26,11 +26,11 @@ export function registerTests({test, assert, api, constants}) {
         }
         for (const item of desc.pParameters) item.pDefaultTexture?.dispose();
         definition.dispose();
-        assert.deepEqual(Array.from(new Float32Array(parameter.pDefaultValue.buffer)), [1, 1, 1, 1]);
+        assert.deepEqual(Array.from(new Float32Array(parameter.pDefaultValue.buffer)), f.data.numbers("material.defaultColor"));
     });
 
     test("material and scene bindings retain their referenced native assets", async t => {
-        const f = createAssetFixture(t, api, assert, constants);
+        const f = createAssetFixture(t, api, assert, constants, testData);
         const definition = f.keep(f.value(f.manager.CreateStandardMaterialDefinition({})));
         const material = f.keep(f.value(f.manager.CreateMaterial(definition)));
         assert.equal(typeof material.GetVersion(), "bigint");
@@ -40,13 +40,13 @@ export function registerTests({test, assert, api, constants}) {
         assert.deepEqual(material.GetTexture(textureHandle, 0), {status: OK, value: null});
         const surface = f.keep(material.QueryInterface(api.IRadientSurfaceMaterialAsset));
         assert.equal(surface.GetSurfaceMode(), constants.RADIENT_MATERIAL_SURFACE_MODE.RADIENT_MATERIAL_SURFACE_MODE_OPAQUE);
-        assert.equal(surface.GetAlphaCutoff(), 0.5);
+        assert.equal(surface.GetAlphaCutoff(), f.data.number("material.defaultAlphaCutoff"));
         assert.equal(surface.IsDoubleSided(), false);
         const entity = f.value(f.writer.CreateEntity({}));
-        assert.equal(f.writer.SetMaterialBindings(entity, {BindingCount: 1, pBindings: [{PrimitiveIndex: 2, pMaterial: material}]}), OK);
+        assert.equal(f.writer.SetMaterialBindings(entity, {BindingCount: 1, pBindings: [{PrimitiveIndex: f.data.number("material.primitiveIndex"), pMaterial: material}]}), OK);
         const bindings = f.value(f.scene.GetMaterialBindings(entity));
         const retained = f.keep(bindings.pBindings[0].pMaterial);
-        assert.equal(bindings.pBindings[0].PrimitiveIndex, 2);
+        assert.equal(bindings.pBindings[0].PrimitiveIndex, f.data.number("material.primitiveIndex"));
         material.dispose();
         assert.equal(f.writer.RemoveComponent(entity, constants.RADIENT_COMPONENT_TYPE_MATERIAL_BINDINGS), OK);
         assert.equal(retained.GetType(), constants.RADIENT_ASSET_TYPE.RADIENT_ASSET_TYPE_MATERIAL);

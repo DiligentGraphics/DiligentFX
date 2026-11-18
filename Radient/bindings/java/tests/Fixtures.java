@@ -49,6 +49,23 @@ final class Fixtures {
         return result;
     }
 
+    static int[] ints(String key) {
+        String[] values = string(key).split(",");
+        int[] result = new int[values.length];
+        for (int i = 0; i < values.length; ++i) result[i] = Integer.parseInt(values[i]);
+        return result;
+    }
+
+    static Path assetPath(String name) {
+        return Path.of(System.getProperty("radient.test.fixtures")).toAbsolutePath()
+            .resolveSibling("assets").resolve(name);
+    }
+
+    static byte[] assetBytes(String name) {
+        try { return Files.readAllBytes(assetPath(name)); }
+        catch (IOException error) { throw new AssertionError("Cannot read shared asset: " + name, error); }
+    }
+
     static byte[] bytes(String key) {
         String[] values = string(key).split(",");
         byte[] result = new byte[values.length];

@@ -1,11 +1,11 @@
 import {createAssetFixture} from "./asset_test_helpers.mjs";
 import {createClip, bindClip} from "./animation_test_helpers.mjs";
 
-export function registerTests({test, assert, api, constants}) {
+export function registerTests({test, assert, api, constants, testData}) {
     const {RADIENT_STATUS_OK: OK, RADIENT_STATUS_NO_CHANGE: NO_CHANGE} = constants.RADIENT_STATUS;
     const types = constants.RADIENT_ANIMATION_VALUE_TYPE;
     test("clips copy sampler bytes and compiled bindings animate scene properties", t => {
-        const f = createAssetFixture(t, api, assert, constants);
+        const f = createAssetFixture(t, api, assert, constants, testData);
         const values = new Float32Array([0, 1, 2, 2, 3, 4]);
         const clip = createClip(f, constants, constants.RadientNodeAnimationSchemaID,
             constants.RadientNodeTranslationPropertyName, types.RADIENT_ANIMATION_VALUE_TYPE_FLOAT3, values);
@@ -27,7 +27,7 @@ export function registerTests({test, assert, api, constants}) {
     });
 
     test("animation registry snapshots retain clips and bindings across every removal path", t => {
-        const f = createAssetFixture(t, api, assert, constants);
+        const f = createAssetFixture(t, api, assert, constants, testData);
         const clip = createClip(f, constants, constants.RadientNodeAnimationSchemaID,
             constants.RadientNodeTranslationPropertyName, types.RADIENT_ANIMATION_VALUE_TYPE_FLOAT3, new Float32Array(6));
         const entity = f.value(f.writer.CreateEntity({}));
@@ -71,7 +71,7 @@ export function registerTests({test, assert, api, constants}) {
     });
 
     test("compiled animation reaches real material, skeleton, and morph destinations", async t => {
-        const f = createAssetFixture(t, api, assert, constants);
+        const f = createAssetFixture(t, api, assert, constants, testData);
         const definition = f.keep(f.value(f.manager.CreateStandardMaterialDefinition({})));
         const material = f.keep(f.value(f.manager.CreateMaterial(definition)));
         const colorClip = createClip(f, constants, constants.RadientMaterialAnimationSchemaID,

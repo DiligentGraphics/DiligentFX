@@ -1,10 +1,10 @@
 import {createAssetFixture} from "./asset_test_helpers.mjs";
 
-export function registerTests({test, assert, api, constants}) {
+export function registerTests({test, assert, api, constants, testData}) {
     const {RADIENT_STATUS_OK: OK, RADIENT_STATUS_NO_CHANGE: NO_CHANGE, RADIENT_STATUS_PENDING: PENDING,
         RADIENT_STATUS_INVALID_ARGUMENT: INVALID} = constants.RADIENT_STATUS;
     test("skeleton and skin descriptors, pose arrays and computed skinning outputs round-trip", t => {
-        const f = createAssetFixture(t, api, assert, constants);
+        const f = createAssetFixture(t, api, assert, constants, testData);
         const joints = [{Name: "Root", LocalRestTransform: {Position: {x: 1}}},
             {Name: "Child", ParentJointIndex: 0, LocalRestTransform: {Position: {y: 2}}}];
         const skeleton = f.keep(f.value(f.manager.CreateSkeleton({Name: "Rig 世界", JointCount: 2, pJoints: joints})));
@@ -51,7 +51,7 @@ export function registerTests({test, assert, api, constants}) {
     });
 
     test("scene skin snapshots retain their skin and pose after component removal", t => {
-        const f = createAssetFixture(t, api, assert, constants);
+        const f = createAssetFixture(t, api, assert, constants, testData);
         const skeleton = f.keep(f.value(f.manager.CreateSkeleton({JointCount: 1, pJoints: [{}]})));
         const skin = f.keep(f.value(f.manager.CreateSkin({pSkeleton: skeleton, JointCount: 1, pJoints: [{SkeletonJointIndex: 0}]})));
         const pose = f.keep(f.value(skeleton.CreatePose()));

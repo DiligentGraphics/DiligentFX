@@ -1,10 +1,10 @@
 import {createAssetFixture} from "./asset_test_helpers.mjs";
 
-export function registerTests({test, assert, api, constants}) {
+export function registerTests({test, assert, api, constants, testData}) {
     const {RADIENT_STATUS_OK: OK, RADIENT_STATUS_NO_CHANGE: NO_CHANGE, RADIENT_STATUS_INVALID_ARGUMENT: INVALID,
         RADIENT_STATUS_NOT_FOUND: NOT_FOUND} = constants.RADIENT_STATUS;
     test("morph creation retains delta blobs and exposes editable weight snapshots", async t => {
-        const f = createAssetFixture(t, api, assert, constants);
+        const f = createAssetFixture(t, api, assert, constants, testData);
         const deltas = f.blob(new Float32Array(27).fill(0.125));
         const targets = [0.25, -1, 0.75].map((DefaultWeight, i) => ({
             Desc: {Name: `Target ${i}`, DefaultWeight, AttributeCount: 1,

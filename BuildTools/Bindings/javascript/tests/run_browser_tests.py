@@ -45,8 +45,12 @@ def run(args, *, extra_roots=None, test_config=None, entry_point="/harness/run_t
     roots = {"generated": module.parent, "tests": suite.parent,
              "harness": Path(__file__).resolve().parent / "browser"}
     roots.update(extra_roots or {})
+    test_assets = getattr(args, "test_assets", None)
+    if test_assets:
+        roots["test-assets"] = test_assets.resolve(strict=True)
     test_data = getattr(args, "test_data", None)
     config = json.dumps({"testData": test_data.read_text(encoding="utf-8") if test_data else None,
+                         "assetRoot": "/test-assets/" if test_assets else None,
                          "test": test_config, "module": "/generated/" + quote(module.name),
                          "suite": "/tests/" + quote(suite.name),
                          "sharedMemory": args.shared_memory}).replace("<", "\\u003c")
@@ -182,6 +186,7 @@ def main():
     parser.add_argument("--browser", default=os.environ.get("BINDINGS_TEST_BROWSER_EXECUTABLE"),
                         help="Chrome, Chromium, or Edge executable (defaults to BINDINGS_TEST_BROWSER_EXECUTABLE or auto-detection)")
     parser.add_argument("--timeout", type=float, default=60, help="Maximum browser test duration in seconds")
+    parser.add_argument("--test-assets", type=Path, help="Directory containing the suite's shared assetFiles")
     parser.add_argument("--test-data", type=Path, help="UTF-8 fixture text passed to the suite as testData")
     parser.add_argument("--shared-memory", action="store_true", help="Require shared Wasm memory and cross-origin isolation")
     args = parser.parse_args()

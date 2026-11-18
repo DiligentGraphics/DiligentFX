@@ -1,13 +1,13 @@
 import {createAssetFixture} from "./asset_test_helpers.mjs";
 
-export function registerTests({test, assert, api, constants}) {
+export function registerTests({test, assert, api, constants, testData}) {
     const {RADIENT_STATUS_OK: OK, RADIENT_STATUS_INVALID_ARGUMENT: INVALID} = constants.RADIENT_STATUS;
     const {RADIENT_INDEX_TYPE_NONE: NONE, RADIENT_INDEX_TYPE_UINT16: UINT16} = constants.RADIENT_INDEX_TYPE;
 
     test("mesh blobs, nested vertex layout, asset status and reflection round-trip", async t => {
-        const f = createAssetFixture(t, api, assert, constants);
+        const f = createAssetFixture(t, api, assert, constants, testData);
         assert.ok(Object.hasOwn(f.manager.GetDesc(), "Name"));
-        const ci = f.triangle({IndexData: {pIndexBuffer: f.blob(new Uint16Array([0, 1, 2])), IndexCount: 3, IndexType: UINT16}});
+        const ci = f.triangle({IndexData: {pIndexBuffer: f.blob(new Uint16Array(f.data.numbers("mesh.indices"))), IndexCount: 3, IndexType: UINT16}});
         const mesh = f.asset(f.manager.CreateMesh(ci));
         ci.VertexData.ppVertexBuffers[0].dispose();
         ci.IndexData.pIndexBuffer.dispose();
@@ -18,7 +18,7 @@ export function registerTests({test, assert, api, constants}) {
         const desc = mesh.GetDesc();
         assert.equal(desc.GeometryCount, 1);
         assert.equal(desc.PrimitiveCount, 1);
-        assert.equal(desc.pPrimitives[0].Name, "Face");
+        assert.equal(desc.pPrimitives[0].Name, f.data.string("mesh.primitiveName"));
         assert.equal(desc.pPrimitives[0].pMaterial, null);
         const geometry = desc.pGeometries[0];
         assert.equal(geometry.VertexCount, 3);
@@ -34,29 +34,30 @@ export function registerTests({test, assert, api, constants}) {
         assert.equal(desc.pGeometries[0].VertexCount, 3); // Copied metadata survives the owner.
     });
 
-    test("scene mesh getters retain assets and mesh-renderer components preserve bigint masks", async t => {
-        const f = createAssetFixture(t, api, assert, constants);
+    test("scene mesh getters retain assets and mesh-renderer components preserve 64-bit masks", async t => {
+        const f = createAssetFixture(t, api, assert, constants, testData);
         const mesh = await f.ready(f.asset(f.manager.CreateMesh(f.triangle())));
         assert.equal(mesh.GetDesc().pGeometries[0].IndexType, NONE);
         const entity = f.value(f.writer.CreateEntity({}));
         assert.equal(f.writer.SetMesh(entity, {pMesh: mesh}), OK);
-        assert.equal(f.writer.SetMeshRenderer(entity, {VisibilityMask: 0x8123456789abcdefn}), OK);
+        assert.equal(f.writer.SetMeshRenderer(entity, {VisibilityMask: BigInt("0x" + f.data.string("mesh.visibilityMask"))}), OK);
         mesh.dispose();
         const retained = f.keep(f.value(f.scene.GetMesh(entity)).pMesh);
         assert.equal(retained.GetDesc().pGeometries[0].VertexCount, 3);
-        assert.equal(f.value(f.scene.GetMeshRenderer(entity)).VisibilityMask, 0x8123456789abcdefn);
+        assert.equal(f.value(f.scene.GetMeshRenderer(entity)).VisibilityMask, BigInt("0x" + f.data.string("mesh.visibilityMask")));
         assert.equal(f.writer.RemoveComponent(entity, constants.RADIENT_COMPONENT_TYPE_MESH), OK);
         assert.equal(f.writer.RemoveComponent(entity, constants.RADIENT_COMPONENT_TYPE_MESH_RENDERER), OK);
         assert.equal(retained.GetDesc().PrimitiveCount, 1);
     });
 
     test("procedural mesh helpers marshal optional six-face colors and reject excessive subdivisions", async t => {
-        const f = createAssetFixture(t, api, assert, constants);
-        const colors = Array.from({length: 6}, (_, i) => ({r: i * 30, g: 64, b: 128, a: 255}));
+        const f = createAssetFixture(t, api, assert, constants, testData);
+        const channels = f.data.numbers("mesh.faceColors");
+        const colors = Array.from({length: 6}, (_, i) => ({r: channels[i * 4], g: channels[i * 4 + 1], b: channels[i * 4 + 2], a: channels[i * 4 + 3]}));
         const cube = await f.ready(f.asset(api.CreateRadientCubeMesh(f.manager, {Name: "Cube", pFaceColors: colors})));
         assert.equal(cube.GetDesc().pGeometries[0].VertexCount, 24);
         assert.ok(cube.GetDesc().pGeometries[0].VertexLayout.pAttributes.some(a => a.Semantic === "COLOR_0"));
-        const sphere = await f.ready(f.asset(api.CreateRadientSphereMesh(f.manager, {Radius: 2, Subdivisions: 2})));
+        const sphere = await f.ready(f.asset(api.CreateRadientSphereMesh(f.manager, {Radius: f.data.number("mesh.sphereRadius"), Subdivisions: f.data.number("mesh.sphereSubdivisions")})));
         assert.ok(sphere.GetDesc().pGeometries[0].IndexCount > 0);
         assert.throws(() => api.CreateRadientCubeMesh(f.manager, {pFaceColors: colors.slice(1)}), /count exceeds/);
         assert.equal(api.CreateRadientCubeMesh(f.manager, {Subdivisions: constants.RADIENT_MESH_PRIMITIVE_MAX_SUBDIVISIONS + 1}).status, INVALID);
