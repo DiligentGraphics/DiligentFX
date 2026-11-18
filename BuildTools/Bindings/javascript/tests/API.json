@@ -189,17 +189,14 @@
       "Diligent::CheckFixedDescriptorInputs",
       "Diligent::EchoFixedDescriptorArrays",
       "Diligent::GetFixedDescriptorCallCount",
-      "Diligent::GetCallCount"
+      "Diligent::GetCallCount",
+      "Diligent::EchoNestedCount",
+      "Diligent::EchoComputedBuffer",
+      "Diligent::GetComputedBufferChecksum",
+      "Diligent::GetComputedBufferCountQueryCount"
     ]
   },
   "declarations": {
-    "Diligent::MarshalNestedCountDesc": {
-      "fields": {
-        "pComputed": {"binding": "manual", "reason": "The native adapter computes the element count."},
-        "pValues": {"length": "Counts.ItemCount"},
-        "pPair": {"length": 2}
-      }
-    },
     "Diligent::MarshalStringDesc": {
       "fields": {
         "Name": {"nullable": false}

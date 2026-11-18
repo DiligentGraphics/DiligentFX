@@ -48,6 +48,26 @@ struct MarshalBytePacket
 };
 typedef struct MarshalBytePacket MarshalBytePacket;
 
+// Type-sized byte storage: there is no native byte-count member to expose.
+struct MarshalComputedBufferDesc
+{
+    IMarshalObject* pObject DEFAULT_INITIALIZER(nullptr);
+    const void* pBytes      DEFAULT_INITIALIZER(nullptr);
+    Uint32 ElementSize     DEFAULT_INITIALIZER(2);
+    Uint32 ElementCount    DEFAULT_INITIALIZER(3);
+    const Char* Label      DEFAULT_INITIALIZER("computed bytes");
+};
+typedef struct MarshalComputedBufferDesc MarshalComputedBufferDesc;
+
+struct MarshalDerivedComputedBufferDesc DILIGENT_DERIVE(MarshalComputedBufferDesc)
+    Uint32 Tag DEFAULT_INITIALIZER(17);
+};
+typedef struct MarshalDerivedComputedBufferDesc MarshalDerivedComputedBufferDesc;
+
+#if DILIGENT_CPP_INTERFACE
+Uint64 GetComputedBufferByteCount(const MarshalComputedBufferDesc& Desc);
+#endif
+
 static DILIGENT_CONSTEXPR INTERFACE_ID IID_MarshalBytes =
     {0x91234567, 0x1234, 0x5678, {0x90, 0xab, 0xcd, 0xef, 0x12, 0x34, 0x56, 0x78}};
 
@@ -150,6 +170,10 @@ MARSHAL_STATUS DILIGENT_GLOBAL_FUNCTION(FillByteSpan)(void* pBytes, Uint64 Capac
 MARSHAL_STATUS DILIGENT_GLOBAL_FUNCTION(FillByteCapacity)(void* pBytes, Uint64 Capacity, Bool Fail);
 void DILIGENT_GLOBAL_FUNCTION(CopyBufferBytes)(void* pBytes, const IMarshalBytes REF Source);
 Uint32 DILIGENT_GLOBAL_FUNCTION(GetByteSpanCallCount)(void);
+Uint32 DILIGENT_GLOBAL_FUNCTION(GetComputedBufferCountQueryCount)(void);
+Uint32 DILIGENT_GLOBAL_FUNCTION(GetComputedBufferChecksum)(const MarshalComputedBufferDesc REF Desc);
+const MarshalComputedBufferDesc REF DILIGENT_GLOBAL_FUNCTION(EchoComputedBuffer)(const MarshalComputedBufferDesc REF Desc, Bool InvalidSize, Bool InvalidLabel);
+const MarshalDerivedComputedBufferDesc REF DILIGENT_GLOBAL_FUNCTION(EchoDerivedComputedBuffer)(const MarshalDerivedComputedBufferDesc REF Desc);
 Uint32 DILIGENT_GLOBAL_FUNCTION(GetLiveBufferCount)(void);
 Uint32 DILIGENT_GLOBAL_FUNCTION(GetBufferReleaseCount)(void);
 Uint64 DILIGENT_GLOBAL_FUNCTION(GetTestHeapSize)(void);

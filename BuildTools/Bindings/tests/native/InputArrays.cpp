@@ -181,8 +181,15 @@ Uint64 GetComputedCount(const MarshalNestedCountDesc& Desc)
     return static_cast<Uint64>(Desc.Counts.ItemCount) + 1;
 }
 
+const MarshalNestedCountDesc& EchoNestedCount(const MarshalNestedCountDesc& Desc)
+{
+    ++ArrayCallCount;
+    return Desc;
+}
+
 Uint32 SumNestedCount(const MarshalNestedCountDesc& Desc)
 {
+    ++ArrayCallCount;
     Uint32 Sum = 0;
     for (Uint32 i = 0; i < Desc.Counts.ItemCount; ++i)
     {

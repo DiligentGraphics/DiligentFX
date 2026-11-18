@@ -66,6 +66,7 @@ Uint64 GetComputedCount(const MarshalNestedCountDesc& Desc);
 
 #include "DefineRefMacro.h"
 Uint32 DILIGENT_GLOBAL_FUNCTION(SumNestedCount)(const MarshalNestedCountDesc REF Desc);
+const MarshalNestedCountDesc REF DILIGENT_GLOBAL_FUNCTION(EchoNestedCount)(const MarshalNestedCountDesc REF Desc);
 Bool DILIGENT_GLOBAL_FUNCTION(CheckArrayInt8)(const Int8* pValues, Uint32 Count);
 Bool DILIGENT_GLOBAL_FUNCTION(CheckArrayUint8)(const Uint8* pValues, Uint32 Count);
 Bool DILIGENT_GLOBAL_FUNCTION(CheckArrayInt16)(const Int16* pValues, Uint32 Count);

@@ -88,7 +88,13 @@
       "Diligent::CheckBytes",
       "Diligent::CreateMarshalBytes",
       "Diligent::GetLiveBufferCount",
-      "Diligent::GetBufferReleaseCount"
+      "Diligent::GetBufferReleaseCount",
+      "Diligent::SumNestedCount",
+      "Diligent::EchoNestedCount",
+      "Diligent::EchoComputedBuffer",
+      "Diligent::EchoDerivedComputedBuffer",
+      "Diligent::GetComputedBufferChecksum",
+      "Diligent::GetComputedBufferCountQueryCount"
     ]
   },
   "declarations": {

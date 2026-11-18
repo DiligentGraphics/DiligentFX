@@ -53,6 +53,24 @@ class GenerationTest(unittest.TestCase):
         self.assertIn("EchoTestMode()", java)
         self.assertIn("Diligent::EchoTestMode(Diligent::TEST_MODE_LAST)", cpp)
 
+    def test_computed_field_counts_require_valid_adapters(self):
+        for name, function in [("Diligent::MarshalNestedCountDesc::Missing", "Diligent::GetComputedCount"),
+                               ("Diligent::MarshalNestedCountDesc::pComputed", "arbitrary()"),
+                               ("Diligent::MarshalNestedCountDesc::pValues", "Diligent::GetComputedCount")]:
+            with self.subTest(name=name, function=function):
+                with self.assertRaisesRegex(backend.ModelError, "field count adapter"):
+                    generate(self.model, adapters={"field_count_functions": {name: function}})
+
+    def test_computed_field_counts_keep_pointer_contract_validation(self):
+        for change, error in [({"lifetime": "object"}, "call lifetime"),
+                              ({"ownership": "owned"}, "(transfer|release) adapter")]:
+            with self.subTest(change=change):
+                model = deepcopy(self.model)
+                field = next(f for f in declaration(model, "MarshalComputedBufferDesc")["fields"] if f["name"] == "pBytes")
+                field["policy"].update(change)
+                with self.assertRaisesRegex(backend.ModelError, error):
+                    generate(model)
+
     def test_scoped_bytes_share_adapters_and_hide_release_methods(self):
         java, cpp = generate(self.model)
         self.assertIn("public IMarshalBytes_MapReadResult MapRead()", java)

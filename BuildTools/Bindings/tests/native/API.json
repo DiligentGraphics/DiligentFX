@@ -737,6 +737,28 @@
           "reason": "Called only when the scoped byte adapter is disposed."
         }
       }
+    },
+    "Diligent::MarshalNestedCountDesc": {
+      "fields": {
+        "pComputed": {
+          "binding": "manual",
+          "reason": "The native adapter computes the element count."
+        },
+        "pValues": {
+          "length": "Counts.ItemCount"
+        },
+        "pPair": {
+          "length": 2
+        }
+      }
+    },
+    "Diligent::MarshalComputedBufferDesc": {
+      "fields": {
+        "pBytes": {
+          "binding": "manual",
+          "reason": "The native adapter computes the byte count."
+        }
+      }
     }
   }
 }

@@ -34,9 +34,10 @@ namespace Diligent
 {
 namespace
 {
-Uint32 LiveBufferCount   = 0;
-Uint32 ReleaseCount      = 0;
-Uint32 ByteSpanCallCount = 0;
+Uint32 LiveBufferCount               = 0;
+Uint32 ReleaseCount                  = 0;
+Uint32 ByteSpanCallCount             = 0;
+Uint32 ComputedBufferCountQueryCount = 0;
 
 Uint64 WriteBytePrefix(void* pBytes, Uint64 Capacity)
 {
@@ -213,6 +214,39 @@ void CopyBufferBytes(void* pBytes, const IMarshalBytes& Source)
     if (Source.Size() != 0)
         std::memcpy(pBytes, Source.GetData(), static_cast<size_t>(Source.Size()));
 }
+Uint64 GetComputedBufferByteCount(const MarshalComputedBufferDesc& Desc)
+{
+    ++ComputedBufferCountQueryCount;
+    return static_cast<Uint64>(Desc.ElementSize) * Desc.ElementCount;
+}
+Uint32 GetComputedBufferChecksum(const MarshalComputedBufferDesc& Desc)
+{
+    // Compute independently of the adapter, including null storage.
+    return ChecksumBytes(Desc.pBytes, Desc.pBytes ? static_cast<Uint64>(Desc.ElementSize) * Desc.ElementCount : 0, False);
+}
+const MarshalComputedBufferDesc& EchoComputedBuffer(const MarshalComputedBufferDesc& Desc, Bool InvalidSize, Bool InvalidLabel)
+{
+    ++ByteSpanCallCount;
+    if (!InvalidSize && !InvalidLabel)
+        return Desc;
+    static MarshalComputedBufferDesc Result;
+    Result = Desc;
+    // Oversized metadata is rejected before reading the small backing array.
+    if (InvalidSize)
+    {
+        Result.ElementSize  = 2;
+        Result.ElementCount = 0xffffffffu;
+    }
+    if (InvalidLabel)
+        Result.Label = "\xED\xA0\x80";
+    return Result;
+}
+const MarshalDerivedComputedBufferDesc& EchoDerivedComputedBuffer(const MarshalDerivedComputedBufferDesc& Desc)
+{
+    ++ByteSpanCallCount;
+    return Desc;
+}
+Uint32 GetComputedBufferCountQueryCount() { return ComputedBufferCountQueryCount; }
 Uint32 GetByteSpanCallCount() { return ByteSpanCallCount; }
 Uint32 GetLiveBufferCount() { return LiveBufferCount; }
 Uint32 GetBufferReleaseCount() { return ReleaseCount; }

@@ -76,6 +76,16 @@ optionally through an unsigned field of its returned descriptor. Both forms use
 unsigned 32-bit or 64-bit counts, checked against Java's array-length limit before
 allocation or copying. No extra Java count argument is needed.
 
+Descriptor pointer fields can instead use the shared `field_count_functions`
+adapter. The native helper receives the containing descriptor and returns an
+unsigned element count (a byte count for `void*` fields). On input, ordinary fields
+are converted first, then the helper is called once per computed field before its
+array is copied. On output, the helper reads the returned native descriptor. The
+usual count checks, nullability, input lifetimes, and snapshot cleanup still apply.
+Inherited fields retain their base descriptor's adapter. Helpers must compute sizes
+from metadata already available at that point, without reading the input field's
+not-yet-populated array or depending on another computed field's conversion order.
+
 Count queries, native calls, and result copying happen within one JNI call. All
 inputs are converted before querying an output capacity; that capacity is reused
 for result conversion even if the operation changes the source's subsequent
@@ -115,7 +125,7 @@ original wrapper's ownership.
 This first backend does not yet cover the entire JavaScript surface. Unsupported
 shapes fail generation: callbacks, multiple interface bases,
 mutable descriptor pointees, recursive descriptor graphs, read-only fixed-array
-fields, adapter-computed field sizes, inout parameters, and non-scalar
+fields, inout parameters, and non-scalar
 constant exports. Native default arguments may be present, but Java callers
 currently supply every input argument.
 Radient selection, packaging, Android integration, and rendering are later steps.

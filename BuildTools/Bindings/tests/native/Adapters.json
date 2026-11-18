@@ -11,5 +11,21 @@
       "size": "Size",
       "success": 3
     }
+  },
+  "field_count_functions": {
+    "Diligent::MarshalNestedCountDesc::pComputed": "Diligent::GetComputedCount",
+    "Diligent::MarshalComputedBufferDesc::pBytes": "Diligent::GetComputedBufferByteCount"
+  },
+  "field_policies": {
+    "Diligent::MarshalNestedCountDesc": {
+      "pComputed": {
+        "binding": "automatic"
+      }
+    },
+    "Diligent::MarshalComputedBufferDesc": {
+      "pBytes": {
+        "binding": "automatic"
+      }
+    }
   }
 }

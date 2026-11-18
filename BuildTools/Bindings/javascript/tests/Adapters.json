@@ -1,14 +1,4 @@
 {
   "extends": "../../tests/native/Adapters.json",
-  "schema_version": 1,
-  "field_count_functions": {
-    "Diligent::MarshalNestedCountDesc::pComputed": "Diligent::GetComputedCount"
-  },
-  "field_policies": {
-    "Diligent::MarshalNestedCountDesc": {
-      "pComputed": {
-        "binding": "automatic"
-      }
-    }
-  }
+  "schema_version": 1
 }

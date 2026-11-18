@@ -57,8 +57,12 @@ class Generator(BindingAPI):
         self.cpp = []
         self.native = []
         self.counter = 0
-        if self.field_count_functions:
-            raise ModelError("Java: computed field sizes are not implemented yet")
+        for name, function in self.field_count_functions.items():
+            owner, _, member = name.rpartition("::")
+            field = next(f for f in self.types[owner]["fields"] if f["name"] == member)
+            # Annotate our private field copy so inherited fields and nested input
+            # validation use the same array shape without altering the shared model.
+            field["count_function"] = function
         for name, declaration in self.types.items():
             if name in self.native_only or declaration["kind"] in ("external", "typedef"):
                 continue
@@ -135,7 +139,7 @@ class Generator(BindingAPI):
             return "fixed_array", t
         if t["kind"] in ("pointer", "reference"):
             target = unalias(t["target"])
-            if {"length", "length_method", "length_from"} & p.keys():
+            if value.get("count_function") or {"length", "length_method", "length_from"} & p.keys():
                 info = self.scalar_info(target)
                 record = self.types.get(target.get("name"), {}).get("kind") == "record"
                 if target["kind"] == "void":
@@ -448,7 +452,7 @@ class Generator(BindingAPI):
     def emit_record(self, d):
         name, short = d["name"], self.short(d["name"])
         fields = self.record_fields(name)
-        read_first, read_fields, write, storage = [], [], [], []
+        read_first, read_fields, read_computed, write, storage = [], [], [], [], []
         for index, field in enumerate(fields):
             member = identifier(field["name"])
             kind, t = self.shape(field)
@@ -462,10 +466,17 @@ class Generator(BindingAPI):
                 raise ModelError("Java: descriptor pointer fields require const data; mutable pointees need a copyback adapter")
             # Read scalar counts and embedded descriptors before dependent array fields,
             # even when the count is declared after the pointer in the native struct.
-            read = read_first if kind in ("scalar", "record") else read_fields
+            count_function = field.get("count_function")
+            read = read_computed if count_function else read_first if kind in ("scalar", "record") else read_fields
             count = field.get("policy", {}).get("length")
             read_count = str(count) if isinstance(count, int) else "Out.Value." + str(count)
             write_count = str(count) if isinstance(count, int) else "Value." + str(count)
+            if count_function:
+                # Query once after ordinary fields are populated. Size calculations
+                # remain native and use the same array bounds checks and ownership.
+                read_count = write_count = f"FieldCount{index}"
+                read.append(f"const std::uint64_t {read_count} = {count_function}(Out.Value);")
+                write.append(f"const std::uint64_t {write_count} = {count_function}(Value);")
             read += [f'const jfieldID Field{index} = Field(Env, Object, "{member}", "{sig}");']
             getter = f"Env->Get{suffix}Field(Object, Field{index})"
             if kind == "scalar":
@@ -529,7 +540,7 @@ class Generator(BindingAPI):
 [[maybe_unused]] static inline void Read{short}(JNIEnv* Env, jobject Object, Input{short}& Out)
 {{
     Require(Env, Object != nullptr, "Required descriptor is null");
-{self.indent(read_first + read_fields, 4)}
+{self.indent(read_first + read_fields + read_computed, 4)}
 }}
 static inline void Write{short}Fields(JNIEnv* Env, jobject Object, const {name}& Value, bool ValidateRequiredFields, Transfers& Pending)
 {{
