@@ -77,7 +77,9 @@ for unsigned integer mappings and other marshalling and ownership rules.
 ## Integration coverage
 
 The tests in `tests/` use real Radient objects and print each case to the console.
-They run with `-Xcheck:jni` and require no GPU, browser, or external assets.
+They run with `-Xcheck:jni` and require no GPU or browser. The 20 cases mirror the
+existing JavaScript suites, using the same input and expected-value
+[fixtures](../tests/integration/README.md). CTest supplies the fixture path.
 
 - `DataBlobTest`: copied and zero-initialized data, empty scopes, access exclusion,
   resize, interface queries, and lifetimes after wrapper closure.

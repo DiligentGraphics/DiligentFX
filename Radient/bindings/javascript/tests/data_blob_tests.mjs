@@ -1,5 +1,7 @@
+import {readFixtures} from "./fixtures.mjs";
 // The production blob cases are shared by the Node and browser runners.
-export function registerTests({test, assert, api, constants, wasm}) {
+export function registerTests({test, assert, api, constants, wasm, testData}) {
+    const data = readFixtures(testData);
     const {
         RADIENT_STATUS_OK: OK,
         RADIENT_STATUS_INVALID_ARGUMENT: INVALID_ARGUMENT,
@@ -32,11 +34,11 @@ export function registerTests({test, assert, api, constants, wasm}) {
 
     test("owning factories copy initial data from the selected array view", t => {
         for (const mutable of [false, true]) {
-            const source = new Uint8Array([99, 17, 128, 254, 88]);
+            const source = data.bytes("blob.source");
             const object = blob(t, mutable, {pData: source.subarray(1, 4), Size: 3n});
             source.fill(0);
             assert.equal(object.GetSize(), 3n);
-            assert.deepEqual(read(t, object).toUint8Array(), new Uint8Array([17, 128, 254]));
+            assert.deepEqual(read(t, object).toUint8Array(), data.bytes("blob.initial"));
         }
     });
 
@@ -55,12 +57,19 @@ export function registerTests({test, assert, api, constants, wasm}) {
         assert.equal(reader.byteLength, 0);
         assert.deepEqual(reader.toUint8Array(), new Uint8Array());
         const mutable = blob(t, true);
+        const emptyReaderBeforeWrite = read(t, mutable);
+        assert.deepEqual(emptyReaderBeforeWrite.toUint8Array(), new Uint8Array());
+        emptyReaderBeforeWrite.dispose();
         const writer = write(t, mutable);
         assert.equal(writer.byteLength, 0);
         writer.copyFrom(new Uint8Array());
         assert.deepEqual(mutable.BeginRead(), {status: INVALID_OPERATION, value: null});
         writer.dispose();
-        assert.equal(read(t, mutable).byteLength, 0);
+        const emptyReader = read(t, mutable);
+        assert.equal(emptyReader.byteLength, 0);
+        emptyReader.dispose();
+        assert.equal(mutable.Resize(4n), OK);
+        assert.deepEqual(read(t, mutable).toUint8Array(), new Uint8Array(4));
     });
 
     test("native-only callbacks, context, and reference storage are not exposed", () => {
@@ -85,7 +94,7 @@ export function registerTests({test, assert, api, constants, wasm}) {
     });
 
     test("native allocation-size rejection returns status and a null output", () => {
-        // Invalid on Wasm32, without allocating a large buffer or relying on OOM.
+        // Exceeds vector::max_size on native and Wasm, without allocating a large buffer.
         const size = (1n << 64n) - 1n;
         for (const factory of [api.CreateRadientDataBlob, api.CreateRadientMutableDataBlob]) {
             assert.deepEqual(factory({Size: size}), {status: INVALID_ARGUMENT, value: null});
@@ -99,6 +108,13 @@ export function registerTests({test, assert, api, constants, wasm}) {
         assert.equal(reader.copyFrom, undefined);
         assert.equal(reader.writeByte, undefined);
         assert.equal(object.EndRead, undefined);
+        const retained = object.QueryInterface(api.IRadientDataBlob);
+        assert.ok(retained);
+        t.after(() => retained.dispose());
+        reader.dispose();
+        object.dispose();
+        assert.equal(retained.GetSize(), 2n);
+        assert.throws(() => object.GetSize(), /disposed/);
     });
 
     test("queried interface views share native access state", t => {
@@ -120,26 +136,30 @@ export function registerTests({test, assert, api, constants, wasm}) {
         const writer = write(t, object);
         assert.deepEqual(base.BeginRead(), {status: INVALID_OPERATION, value: null});
         assert.deepEqual(queried.BeginWrite(), {status: INVALID_OPERATION, value: null});
-        writer.copyFrom(new Uint8Array([17, 128, 254, 42]));
+        writer.copyFrom(data.bytes("blob.written"));
         writer.dispose();
-        assert.deepEqual(read(t, base).toUint8Array(), new Uint8Array([17, 128, 254, 42]));
+        assert.deepEqual(read(t, base).toUint8Array(), data.bytes("blob.written"));
     });
 
     test("resize preserves data, zeros added bytes, and discards truncated data", t => {
-        const object = blob(t, true, {Size: 3n, pData: new Uint8Array([17, 128, 254])});
-        assert.equal(object.Resize(6n), OK);
+        const object = blob(t, true, {Size: 3n, pData: data.bytes("blob.initial")});
         let reader = read(t, object);
-        assert.deepEqual(reader.toUint8Array(), new Uint8Array([17, 128, 254, 0, 0, 0]));
+        assert.equal(object.Resize(6n), INVALID_OPERATION);
+        assert.deepEqual(object.BeginWrite(), {status: INVALID_OPERATION, value: null});
+        reader.dispose();
+        assert.equal(object.Resize(6n), OK);
+        reader = read(t, object);
+        assert.deepEqual(reader.toUint8Array(), data.bytes("blob.grown"));
         reader.dispose();
         assert.equal(object.Resize(1n), OK);
         assert.equal(object.Resize(3n), OK);
         reader = read(t, object);
-        assert.deepEqual(reader.toUint8Array(), new Uint8Array([17, 0, 0]));
+        assert.deepEqual(reader.toUint8Array(), data.bytes("blob.truncated"));
         reader.dispose();
         assert.equal(object.Resize((1n << 64n) - 1n), INVALID_ARGUMENT);
         assert.equal(object.GetSize(), 3n);
         reader = read(t, object);
-        assert.deepEqual(reader.toUint8Array(), new Uint8Array([17, 0, 0]));
+        assert.deepEqual(reader.toUint8Array(), data.bytes("blob.truncated"));
         reader.dispose();
         assert.equal(object.Resize(0n), OK);
         assert.equal(read(t, object).byteLength, 0);
@@ -160,9 +180,15 @@ export function registerTests({test, assert, api, constants, wasm}) {
         const reader = read(t, immutable);
         immutable.dispose();
         assert.equal(reader.readByte(0), 254);
+        const extra = blob(t, true, {Size: 3n, pData: data.bytes("blob.initial")});
+        const extraWriter = write(t, extra);
+        extra.dispose();
+        extraWriter.copyFrom(data.bytes("blob.retained"));
+        assert.equal(extraWriter.readByte(0), 255);
+        assert.deepEqual(extraWriter.toUint8Array(), data.bytes("blob.retained"));
     });
 
-    test("finally releases native write access when JavaScript processing fails", t => {
+    test("finally releases native write access when client processing fails", t => {
         const object = blob(t, true, {Size: 1n});
         const error = new Error("processing failed");
         assert.throws(() => {
@@ -174,7 +200,7 @@ export function registerTests({test, assert, api, constants, wasm}) {
     });
 
     test("active byte scopes remain valid after Wasm memory grows", t => {
-        const object = blob(t, true, {Size: 3n, pData: new Uint8Array([17, 128, 254])});
+        const object = blob(t, true, {Size: 3n, pData: data.bytes("blob.initial")});
         const writer = write(t, object);
         const oldSize = wasm.HEAPU8.byteLength;
         // A request larger than the entire current heap forces growth without
@@ -183,7 +209,7 @@ export function registerTests({test, assert, api, constants, wasm}) {
         assert.ok(allocation);
         t.after(() => wasm._free(allocation));
         assert.ok(wasm.HEAPU8.byteLength > oldSize, "The test must actually grow Wasm memory");
-        assert.deepEqual(writer.toUint8Array(), new Uint8Array([17, 128, 254]));
+        assert.deepEqual(writer.toUint8Array(), data.bytes("blob.initial"));
         writer.copyFrom(new Uint8Array([42, 99]), 1);
         writer.writeByte(0, 7);
         const copy = new Uint8Array(3);

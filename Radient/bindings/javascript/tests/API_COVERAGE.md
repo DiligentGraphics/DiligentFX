@@ -3,6 +3,9 @@
 Shared suites run against real Radient in Node and a browser, without a GPU.
 The separate browser bootstrap suite uses a real WebGPU device.
 The model and generator tests separately check declarations and metadata.
+Blob, scene, and component suites have matching Java cases and shared inputs;
+see the [integration coverage mapping](../../tests/integration/README.md) for the
+intentional language-specific checks and fixture loading.
 
 | Suite | Executed API |
 | --- | --- |

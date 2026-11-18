@@ -5,6 +5,8 @@ import static diligent.radient.Radient.*;
 import static diligent.radient.Radient.RADIENT_STATUS.*;
 import static diligent.radient.tests.TestSupport.*;
 
+// Mirrors components_tests.mjs, including every field, defaults, failures,
+// revisions, and snapshot independence. Expected values come from shared fixtures.
 public final class ComponentsTest {
     private static boolean has(IRadientScene scene, long entity, long type) {
         var result = scene.HasComponent(entity, type);
@@ -13,18 +15,12 @@ public final class ComponentsTest {
     }
 
     public static void main(String[] args) {
-        run("Components.CameraDefaultsUpdatesAndSnapshots", () -> {
+        run("camera descriptors round-trip all fields and return independent snapshots", () -> {
             try (SceneFixture f = new SceneFixture()) {
-                long entity = f.entity(new RadientEntityDesc());
-                RadientCameraComponent camera = new RadientCameraComponent();
-                equal(RADIENT_CAMERA_PROJECTION.RADIENT_CAMERA_PROJECTION_PERSPECTIVE, camera.Projection);
-                equal(50.f, camera.FocalLength);
-                equal(0.1f, camera.ClippingRange.x);
-                camera.Projection = RADIENT_CAMERA_PROJECTION.RADIENT_CAMERA_PROJECTION_ORTHOGRAPHIC;
-                camera.VerticalAperture = 18;
-                camera.HorizontalAperture = 24;
-                camera.ClippingRange.x = 0.5f;
-                camera.ClippingRange.y = 256;
+                RadientEntityDesc entityInfo = new RadientEntityDesc();
+                entityInfo.Name = "Camera";
+                long entity = f.entity(entityInfo);
+                RadientCameraComponent camera = Fixtures.camera();
                 var before = f.scene.GetSceneRevisions();
                 ok(f.writer.SetCamera(entity, camera));
                 check(f.scene.GetSceneRevisions().Cameras > before.Cameras);
@@ -32,63 +28,99 @@ public final class ComponentsTest {
                 check(!has(f.scene, entity, RADIENT_COMPONENT_TYPE_LIGHT));
                 var snapshot = f.scene.GetCamera(entity);
                 ok(snapshot.returnValue);
-                equal(camera.Projection, snapshot.Camera.Projection);
-                equal(18.f, snapshot.Camera.VerticalAperture);
-                equal(24.f, snapshot.Camera.HorizontalAperture);
+                descriptorEqual(Fixtures.camera(), snapshot.Camera);
+                camera.ClippingRange.y = Fixtures.number("camera.updatedFarClip");
                 snapshot.Camera.ClippingRange.x = 4;
-                camera.ClippingRange.y = 512;
                 var unchanged = f.scene.GetCamera(entity);
                 ok(unchanged.returnValue);
-                equal(0.5f, unchanged.Camera.ClippingRange.x);
-                equal(256.f, unchanged.Camera.ClippingRange.y);
+                descriptorEqual(Fixtures.vector2("camera.ClippingRange"), unchanged.Camera.ClippingRange);
                 ok(f.writer.SetCamera(entity, camera));
+                var updated = f.scene.GetCamera(entity);
+                ok(updated.returnValue);
+                equal(Fixtures.number("camera.updatedFarClip"), updated.Camera.ClippingRange.y);
                 equal(RADIENT_STATUS_NO_CHANGE, f.writer.SetCamera(entity, camera));
+                // Preserve removal of the edited camera, in addition to defaults below.
                 ok(f.writer.RemoveComponent(entity, RADIENT_COMPONENT_TYPE_CAMERA));
                 check(!has(f.scene, entity, RADIENT_COMPONENT_TYPE_CAMERA));
                 equal(RADIENT_STATUS_NOT_FOUND, f.scene.GetCamera(entity).returnValue);
             }
         });
 
-        run("Components.LightNestedValuesAndBooleanFields", () -> {
+        run("light descriptors preserve nested color, booleans, and all scalar fields", () -> {
             try (SceneFixture f = new SceneFixture()) {
-                long entity = f.entity(new RadientEntityDesc());
-                RadientLightComponent light = new RadientLightComponent();
-                equal(RADIENT_LIGHT_TYPE.RADIENT_LIGHT_TYPE_DIRECTIONAL, light.Type);
-                equal(1.f, light.Intensity);
-                equal(false, light.EnableColorTemperature);
-                light.Type = RADIENT_LIGHT_TYPE.RADIENT_LIGHT_TYPE_SPOT;
-                light.Color.x = 0.25f;
-                light.Color.y = 0.5f;
-                light.Color.z = 0.75f;
-                light.Intensity = 8;
-                light.Range = 32;
-                light.Normalize = true;
-                light.EnableColorTemperature = true;
-                light.ColorTemperature = 5000;
-                light.InnerConeAngle = 0.25f;
-                light.OuterConeAngle = 1;
+                RadientEntityDesc entityInfo = new RadientEntityDesc();
+                entityInfo.Name = "Light";
+                long entity = f.entity(entityInfo);
+                RadientLightComponent light = Fixtures.light();
                 var before = f.scene.GetSceneRevisions();
                 ok(f.writer.SetLight(entity, light));
                 check(f.scene.GetSceneRevisions().Lights > before.Lights);
                 check(has(f.scene, entity, RADIENT_COMPONENT_TYPE_LIGHT));
                 var snapshot = f.scene.GetLight(entity);
                 ok(snapshot.returnValue);
-                equal(light.Type, snapshot.Light.Type);
-                equal(8.f, snapshot.Light.Intensity);
-                equal(32.f, snapshot.Light.Range);
-                equal(true, snapshot.Light.Normalize);
-                equal(true, snapshot.Light.EnableColorTemperature);
-                equal(5000.f, snapshot.Light.ColorTemperature);
+                descriptorEqual(Fixtures.light(), snapshot.Light);
                 light.Color.x = 1;
                 snapshot.Light.Color.y = 1;
                 var unchanged = f.scene.GetLight(entity);
                 ok(unchanged.returnValue);
-                equal(0.25f, unchanged.Light.Color.x);
-                equal(0.5f, unchanged.Light.Color.y);
-                equal(0.75f, unchanged.Light.Color.z);
+                descriptorEqual(Fixtures.vector3("light.Color"), unchanged.Light.Color);
+                ok(f.writer.SetLight(entity, light));
+                var updated = f.scene.GetLight(entity);
+                ok(updated.returnValue);
+                equal(1.f, updated.Light.Color.x);
+                equal(RADIENT_STATUS_NO_CHANGE, f.writer.SetLight(entity, light));
                 ok(f.writer.RemoveComponent(entity, RADIENT_COMPONENT_TYPE_LIGHT));
                 check(!has(f.scene, entity, RADIENT_COMPONENT_TYPE_LIGHT));
                 equal(RADIENT_STATUS_NOT_FOUND, f.scene.GetLight(entity).returnValue);
+            }
+        });
+
+        run("default components, native validation, and removal keep their public contracts", () -> {
+            try (SceneFixture f = new SceneFixture()) {
+                long entity = f.entity(new RadientEntityDesc());
+                RadientCameraComponent defaults = new RadientCameraComponent();
+                equal(RADIENT_CAMERA_PROJECTION.RADIENT_CAMERA_PROJECTION_PERSPECTIVE, defaults.Projection);
+                equal(Fixtures.number("camera.defaultFocalLength"), defaults.FocalLength);
+                descriptorEqual(Fixtures.vector2("camera.defaultClippingRange"), defaults.ClippingRange);
+                RadientLightComponent lightDefaults = new RadientLightComponent();
+                equal(RADIENT_LIGHT_TYPE.RADIENT_LIGHT_TYPE_DIRECTIONAL, lightDefaults.Type);
+                equal(Fixtures.number("light.defaultIntensity"), lightDefaults.Intensity);
+                equal(false, lightDefaults.Normalize);
+                equal(false, lightDefaults.EnableColorTemperature);
+                descriptorEqual(Fixtures.vector3("light.defaultColor"), lightDefaults.Color);
+                ok(f.writer.SetCamera(entity, defaults));
+                ok(f.writer.SetLight(entity, lightDefaults));
+                var camera = f.scene.GetCamera(entity);
+                var light = f.scene.GetLight(entity);
+                ok(camera.returnValue);
+                ok(light.returnValue);
+                descriptorEqual(defaults, camera.Camera);
+                descriptorEqual(lightDefaults, light.Light);
+
+                // One native rejection per component; exhaustive validation is native-tested.
+                RadientCameraComponent invalidCamera = new RadientCameraComponent();
+                invalidCamera.ClippingRange = Fixtures.vector2("camera.invalidClippingRange");
+                RadientLightComponent invalidLight = new RadientLightComponent();
+                invalidLight.Intensity = Fixtures.number("light.invalidIntensity");
+                equal(RADIENT_STATUS_INVALID_ARGUMENT, f.writer.SetCamera(entity, invalidCamera));
+                equal(RADIENT_STATUS_INVALID_ARGUMENT, f.writer.SetLight(entity, invalidLight));
+                var unchangedCamera = f.scene.GetCamera(entity);
+                var unchangedLight = f.scene.GetLight(entity);
+                ok(unchangedCamera.returnValue);
+                ok(unchangedLight.returnValue);
+                descriptorEqual(camera.Camera, unchangedCamera.Camera);
+                descriptorEqual(light.Light, unchangedLight.Light);
+                ok(f.writer.RemoveComponent(entity, RADIENT_COMPONENT_TYPE_CAMERA));
+                check(!has(f.scene, entity, RADIENT_COMPONENT_TYPE_CAMERA));
+                check(has(f.scene, entity, RADIENT_COMPONENT_TYPE_LIGHT));
+                var removedCamera = f.scene.GetCamera(entity);
+                equal(RADIENT_STATUS_NOT_FOUND, removedCamera.returnValue);
+                descriptorEqual(camera.Camera, removedCamera.Camera);
+                ok(f.writer.RemoveComponent(entity, RADIENT_COMPONENT_TYPE_LIGHT));
+                check(!has(f.scene, entity, RADIENT_COMPONENT_TYPE_LIGHT));
+                var removedLight = f.scene.GetLight(entity);
+                equal(RADIENT_STATUS_NOT_FOUND, removedLight.returnValue);
+                descriptorEqual(light.Light, removedLight.Light);
             }
         });
     }

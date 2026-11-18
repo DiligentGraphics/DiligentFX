@@ -16,7 +16,8 @@ foreach(SUITE IN LISTS SUITES)
             "${CMAKE_CURRENT_SOURCE_DIR}/run_node.mjs" "${GENERATED}/Radient.mjs" "${SUITE}")
     add_test(NAME "Radient-JavaScript-Browser-${SUITE_NAME}"
         COMMAND ${BINDING_COMMAND} "${BINDING_TOOLS}/javascript/tests/run_browser_tests.py"
-            --module "${GENERATED}/Radient.mjs" --suite "${SUITE}" --shared-memory)
+            --module "${GENERATED}/Radient.mjs" --suite "${SUITE}" --shared-memory
+            --test-data "${CMAKE_CURRENT_SOURCE_DIR}/../../tests/integration/fixtures.properties")
     set_tests_properties("Radient-JavaScript-Node-${SUITE_NAME}"
         PROPERTIES LABELS "Bindings;JavaScript" TIMEOUT 90)
     set_tests_properties("Radient-JavaScript-Browser-${SUITE_NAME}"

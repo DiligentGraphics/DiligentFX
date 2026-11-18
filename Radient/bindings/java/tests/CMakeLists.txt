@@ -25,6 +25,7 @@ foreach(TEST_FILE IN LISTS JAVA_TESTS)
     add_test(NAME "Radient-Java-${TEST_NAME}"
         COMMAND "${Java_JAVA_EXECUTABLE}" -Xcheck:jni
             "-Djava.library.path=$<TARGET_FILE_DIR:RadientJNI>"
+            "-Dradient.test.fixtures=${CMAKE_CURRENT_SOURCE_DIR}/../../tests/integration/fixtures.properties"
             -cp "${TEST_CLASSPATH}" "diligent.radient.tests.${TEST_NAME}")
     set_tests_properties("Radient-Java-${TEST_NAME}"
         PROPERTIES LABELS "Radient;Bindings;Java" TIMEOUT 60)

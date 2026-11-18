@@ -1,6 +1,8 @@
+import {readFixtures} from "./fixtures.mjs";
 import {createSceneFixture} from "./scene_test_helpers.mjs";
 
-export function registerTests({test, assert, api, constants}) {
+export function registerTests({test, assert, api, constants, testData}) {
+    const data = readFixtures(testData);
     const {
         RADIENT_STATUS_OK: OK,
         RADIENT_STATUS_NO_CHANGE: NO_CHANGE,
@@ -11,7 +13,7 @@ export function registerTests({test, assert, api, constants}) {
     const invalid = constants.InvalidRadientEntityID;
 
     test("engine resource configuration accepts partial descriptors and validates integer types", t => {
-        for (const Resources of [{}, {VertexPoolSize: 1024, MaxIndexBufferSize: 0n}]) {
+        for (const Resources of [{}, {VertexPoolSize: data.number("resources.VertexPoolSize"), MaxIndexBufferSize: BigInt(data.string("resources.MaxIndexBufferSize"))}]) {
             const result = api.CreateRadientEngine({WorkerThreadCount: 1, Resources});
             t.after(() => result.value?.dispose());
             assert.equal(result.status, OK);
@@ -23,10 +25,10 @@ export function registerTests({test, assert, api, constants}) {
         assert.throws(() => api.CreateRadientEngine({Resources: {VertexPoolSize: -1}}), RangeError);
     });
 
-    test("scene and entity names are copied, with native defaults and bigint IDs", t => {
-        const {engine, scene, writer, value} = createSceneFixture(t, api, assert, OK, "Scène 世界");
-        assert.deepEqual(scene.GetDesc(), {Name: "Scène 世界"});
-        const desc = {Name: "Child 🟢"};
+    test("scene and entity names are copied, with native defaults and 64-bit IDs", t => {
+        const {engine, scene, writer, value} = createSceneFixture(t, api, assert, OK, data.string("scene.name"));
+        assert.deepEqual(scene.GetDesc(), {Name: data.string("scene.name")});
+        const desc = {Name: data.string("scene.entityName")};
         const entity = value(writer.CreateEntity(desc));
         desc.Name = "changed JS descriptor";
         assert.equal(typeof entity, "bigint");
@@ -39,11 +41,11 @@ export function registerTests({test, assert, api, constants}) {
             Position: {x: 0, y: 0, z: 0}, Rotation: {x: 0, y: 0, z: 0, w: 1}, Scale: {x: 1, y: 1, z: 1},
         });
         const name = value(scene.GetEntityName(entity));
-        assert.equal(name, "Child 🟢");
-        assert.equal(writer.SetEntityName(entity, "Renamed"), OK);
-        assert.equal(value(scene.GetEntityName(entity)), "Renamed");
-        assert.equal(name, "Child 🟢");
-        assert.equal(writer.SetEntityName(entity, "Renamed"), NO_CHANGE);
+        assert.equal(name, data.string("scene.entityName"));
+        assert.equal(writer.SetEntityName(entity, data.string("scene.renamed")), OK);
+        assert.equal(value(scene.GetEntityName(entity)), data.string("scene.renamed"));
+        assert.equal(name, data.string("scene.entityName"));
+        assert.equal(writer.SetEntityName(entity, data.string("scene.renamed")), NO_CHANGE);
         assert.equal(writer.SetEntityName(entity, null), OK);
         assert.equal(value(scene.GetEntityName(entity)), "");
     });
@@ -86,18 +88,18 @@ export function registerTests({test, assert, api, constants}) {
 
     test("nested transforms, matrix snapshots, revisions, and default reparenting cross the binding", t => {
         const {scene, writer, value} = createSceneFixture(t, api, assert, OK);
-        const parent = value(writer.CreateEntity({Transform: {Position: {x: 2, y: 3, z: 4}}}));
+        const parent = value(writer.CreateEntity({Transform: {Position: data.vector("scene.parentPosition")}}));
         const child = value(writer.CreateEntity({Parent: parent}));
         const revisions = scene.GetSceneRevisions();
-        const transform = {Position: {x: 5, y: 6, z: 7}, Scale: {x: 2, y: 3, z: 4}};
+        const transform = {Position: data.vector("scene.childPosition"), Scale: data.vector("scene.childScale")};
         assert.equal(writer.SetLocalTransform(child, transform), OK);
         transform.Position.x = 999;
-        assert.equal(value(scene.GetLocalTransform(child)).Position.x, 5);
+        assert.equal(value(scene.GetLocalTransform(child)).Position.x, data.vector("scene.childPosition").x);
         assert.equal(typeof revisions.Transforms, "bigint");
         assert.ok(scene.GetSceneRevisions().Transforms > revisions.Transforms);
         assert.equal(scene.GetCachedWorldMatrix(child).status, OUT_OF_DATE);
         assert.equal(writer.CommitChanges(), OK);
-        const expected = [2, 0, 0, 0, 0, 3, 0, 0, 0, 0, 4, 0, 7, 9, 11, 1];
+        const expected = data.numbers("scene.worldMatrix");
         const snapshot = value(scene.GetWorldMatrix(child));
         assert.ok(snapshot.Data instanceof Float32Array);
         assert.deepEqual(Array.from(snapshot.Data), expected);
@@ -108,7 +110,7 @@ export function registerTests({test, assert, api, constants}) {
         assert.equal(value(scene.GetParent(child)), invalid);
         assert.deepEqual(Array.from(value(scene.GetWorldMatrix(child)).Data), expected);
         assert.equal(writer.SetParent(child, parent, false), OK);
-        assert.equal(value(scene.GetWorldMatrix(child)).Data[12], 9);
+        assert.equal(value(scene.GetWorldMatrix(child)).Data[12], data.number("scene.reparentedWorldX"));
     });
 
     test("visibility edits and cached queries preserve native status and boolean semantics", t => {
@@ -120,6 +122,11 @@ export function registerTests({test, assert, api, constants}) {
         assert.equal(scene.GetCachedEntityEffectiveVisibility(child).status, OUT_OF_DATE);
         assert.equal(value(scene.GetEntityOwnVisibility(child)), true);
         assert.equal(value(scene.GetEntityEffectiveVisibility(child)), false);
+        // Preserve the original Java restoration/cached-query check as well.
+        assert.equal(writer.SetEntityOwnVisibility(parent, true), OK);
+        assert.equal(writer.CommitChanges(), OK);
+        assert.equal(value(scene.GetCachedEntityEffectiveVisibility(child)), true);
+        assert.equal(writer.SetEntityOwnVisibility(parent, false), OK);
         assert.equal(writer.SetEntityFlags(parent, VISIBLE), OK);
         assert.equal(writer.SetEntityFlags(child, NONE), OK);
         assert.equal(writer.CommitChanges(), OK);
@@ -129,16 +136,17 @@ export function registerTests({test, assert, api, constants}) {
     });
 
     test("borrowed scene wrappers retain the native scene after other owners are disposed", t => {
-        const {engine, scene, writer, value} = createSceneFixture(t, api, assert, OK, "Retained scene");
-        const entity = value(writer.CreateEntity({Name: "Retained entity"}));
+        const {engine, scene, writer, value} = createSceneFixture(t, api, assert, OK, data.string("scene.retainedName"));
+        const entity = value(writer.CreateEntity({Name: data.string("scene.retainedEntityName")}));
         const retained = writer.GetScene();
         t.after(() => retained.dispose());
         writer.dispose();
         scene.dispose();
         engine.dispose();
+        assert.throws(() => scene.GetDesc(), /disposed/);
         assert.equal(retained.IsEntityAlive(entity), OK);
-        assert.deepEqual(retained.GetDesc(), {Name: "Retained scene"});
-        assert.equal(value(retained.GetEntityName(entity)), "Retained entity");
+        assert.deepEqual(retained.GetDesc(), {Name: data.string("scene.retainedName")});
+        assert.equal(value(retained.GetEntityName(entity)), data.string("scene.retainedEntityName"));
         retained.dispose();
         assert.throws(() => retained.GetDesc(), /disposed/);
     });

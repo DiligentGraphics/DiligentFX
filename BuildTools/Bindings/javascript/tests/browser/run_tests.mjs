@@ -24,7 +24,7 @@ try {
         assert.equal(sharedMemory, true, "Expected the production shared-memory Wasm build");
     }
     const moduleURL = new URL(config.module, location.href);
-    const tests = await runTests(test => registerTests({test, assert, api, constants: bindings, wasm, moduleURL}));
+    const tests = await runTests(test => registerTests({test, assert, api, constants: bindings, wasm, moduleURL, testData: config.testData}));
     await report({userAgent: navigator.userAgent, crossOriginIsolated, sharedMemory, tests});
 } catch (error) {
     await fatal(error);
