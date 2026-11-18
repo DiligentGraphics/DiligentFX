@@ -55,6 +55,16 @@ endif()
 
 set(BINDING_ARGUMENTS "--target=${BINDING_TARGET}")
 if(NOT RADIENT_BINDINGS_TARGET)
+    # Native API headers use Diligent's explicit platform macros. Match the
+    # library rather than relying on Clang's built-in operating-system macros.
+    if(TARGET Diligent-PublicBuildSettings)
+        get_target_property(BINDING_DEFINITIONS Diligent-PublicBuildSettings INTERFACE_COMPILE_DEFINITIONS)
+        foreach(DEFINITION IN LISTS BINDING_DEFINITIONS)
+            if(DEFINITION MATCHES "^PLATFORM_[A-Z0-9_]+=1$")
+                list(APPEND BINDING_ARGUMENTS "--clang-arg=-D${DEFINITION}")
+            endif()
+        endforeach()
+    endif()
     if(EMSCRIPTEN)
         list(APPEND BINDING_ARGUMENTS
             "--clang-arg=--sysroot=${EMSCRIPTEN_SYSROOT}"
@@ -108,4 +118,11 @@ endif()
 # provide only model generation and tests, without building Radient's dependencies.
 if(EMSCRIPTEN AND TARGET Radient)
     add_subdirectory(javascript)
+endif()
+
+if(RADIENT_BUILD_JAVA_BINDINGS)
+    if(CMAKE_CROSSCOMPILING OR EMSCRIPTEN OR NOT TARGET Radient)
+        message(FATAL_ERROR "Radient Java bindings require a native Radient build matching the host JVM architecture.")
+    endif()
+    add_subdirectory(java)
 endif()

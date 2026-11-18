@@ -142,11 +142,13 @@ original wrapper's ownership.
 
 This first backend does not yet cover the entire JavaScript surface. Unsupported
 shapes fail generation: callbacks, multiple interface bases,
-mutable descriptor pointees, recursive descriptor graphs, read-only fixed-array
-fields, inout parameters, and non-null native-address constant exports.
+mutable descriptor pointees, recursive descriptor graphs, inout parameters,
+and non-null native-address constant exports.
 Native default arguments may be present, but Java callers
 currently supply every input argument.
-Radient selection, packaging, Android integration, and rendering are later steps.
+Production Radient integration and its CPU tests are described in the
+[Radient Java bindings](../../../Radient/bindings/java/README.md). Packaging,
+Android integration, and rendering are later steps.
 
 ## Scoped byte access
 

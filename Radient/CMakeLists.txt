@@ -225,6 +225,7 @@ set_target_properties(Radient PROPERTIES
 source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${RADIENT_SOURCE})
 
 option(RADIENT_GENERATE_BINDINGS "Enable Radient binding generation and tests" OFF)
-if(RADIENT_GENERATE_BINDINGS)
+option(RADIENT_BUILD_JAVA_BINDINGS "Build Radient Java/JNI bindings and integration tests" OFF)
+if(RADIENT_GENERATE_BINDINGS OR RADIENT_BUILD_JAVA_BINDINGS)
     add_subdirectory(bindings)
 endif()

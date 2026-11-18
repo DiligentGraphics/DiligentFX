@@ -1,22 +1,3 @@
 {
-  "extends": "../Adapters.json",
-  "native_only": [
-    "Diligent::RADIENT_DATA_BLOB_STORAGE_MODE",
-    "Diligent::RadientDataBlobCreateInfo::OnLastReaderReleased",
-    "Diligent::RadientDataBlobCreateInfo::OnDestroy",
-    "Diligent::RadientDataBlobCreateInfo::pUserData",
-    "Diligent::RadientEngineCreateInfo::Backend",
-    "Diligent::RadientEngineCreateInfo::Assets",
-    "Diligent::RadientEngineCreateInfo::pThreadPool",
-    "Diligent::IThreadPool",
-    "Diligent::IDeviceContext",
-    "Diligent::ISwapChain",
-    "Diligent::ITextureView",
-    "Diligent::RadientFrameAttribs::pDeviceContext",
-    "Diligent::RadientRenderTargetDesc::pSwapChain",
-    "Diligent::RadientRenderTargetDesc::pColorRTV",
-    "Diligent::RadientRenderTargetDesc::pDepthDSV",
-    "Diligent::RadientBackendCreateInfo",
-    "Diligent::RadientAssetManagerCreateInfo"
-  ]
+  "extends": "../Adapters.json"
 }
