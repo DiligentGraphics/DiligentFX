@@ -14,7 +14,7 @@ add_custom_target(Radient-GenerateJavaScript
         --surface "${GENERATED}/api_surface.json"
     # A normal build validates the reviewed contract; only the explicit Python
     # update command may accept changes to the source snapshot.
-    COMMAND ${BINDING_COMMAND} "${BINDING_TOOLS}/javascript/api_surface.py"
+    COMMAND ${BINDING_COMMAND} "${BINDING_TOOLS}/api_surface.py"
         --actual "${GENERATED}/api_surface.json"
         --baseline "${CMAKE_CURRENT_SOURCE_DIR}/api_surface.json"
     BYPRODUCTS "${MODEL}" "${GENERATED}/Radient.cpp" "${GENERATED}/Radient.mjs"

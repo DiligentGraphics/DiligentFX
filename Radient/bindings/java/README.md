@@ -39,6 +39,34 @@ directory on their classpath and the directory containing `RadientJNI` on
 `java.library.path`. Generated sources are not checked in. JAR distribution is not
 part of this initial build integration.
 
+## Reviewing API changes
+
+The checked-in [`api_surface.json`](api_surface.json) records the reviewed Java
+binding contract: selected declarations, signatures, fields/defaults, constants,
+inheritance, ownership, nullability, array counts, and adapter contracts.
+`Radient-GenerateJava` emits the current surface and runs the shared
+`BuildTools/Bindings/api_surface.py` checker before Java or JNI compilation.
+Additions, removals, and changes fail the build with a diff, even if JavaScript
+bindings are disabled. Normal builds never update the baseline.
+
+The Java baseline uses native scalar widths and signedness, normalizing equivalent
+integer spellings such as 64-bit `unsigned long` and `unsigned long long`.
+Platform names and ABI layout are omitted; actual type widths remain significant.
+JavaScript retains its separate Wasm32 baseline, including browser-specific APIs.
+Comments, source locations, and declaration order do not require baseline updates.
+
+For an intentional API change, let generation produce the current surface (the
+build will stop at the comparison), add or update its tests, then explicitly
+accept it from the DiligentEngine root:
+
+```sh
+python DiligentFX/BuildTools/Bindings/api_surface.py \
+    --actual build/DiligentFX/Radient/bindings/java/generated/api_surface.json \
+    --baseline DiligentFX/Radient/bindings/java/api_surface.json --update
+```
+
+Use your configured build directory in place of `build`, then rebuild normally.
+
 ## API conventions
 
 Descriptors are Java objects initialized with native defaults. Fill their fields

@@ -9,7 +9,9 @@ exception fixtures stay in `tests/fixtures/`.
 
 Generated sources are build artifacts. `generate.py` accepts `--model`, `--module`,
 `--package`, `--library`, one or more `--header` arguments, and `--output`.
-`--adapters` optionally loads the shared adapter configuration.
+`--adapters` optionally loads the shared adapter configuration. `--surface` writes
+the effective native binding contract for the shared [`api_surface.py`](../api_surface.py)
+checker. Each backend keeps its own explicitly reviewed baseline.
 
 ## Supported initial surface
 

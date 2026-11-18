@@ -1216,11 +1216,16 @@ def main():
     parser.add_argument("--header", action="append", required=True)
     parser.add_argument("--adapters", type=Path)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--surface", type=Path, help="Write the compact binding contract for API baseline checks")
     args = parser.parse_args()
     try:
         model = json.loads(args.model.read_text(encoding="utf-8"))
         adapters = load_config(args.adapters) if args.adapters else None
-        java, cpp = Generator(model, args.module, args.package, args.library, args.header, adapters).generate()
+        generator = Generator(model, args.module, args.package, args.library, args.header, adapters)
+        java, cpp = generator.generate()
+        if args.surface:
+            from api_surface import build_surface, format_surface
+            write_if_changed(args.surface, format_surface(build_surface(generator, target="native")))
         write_if_changed(args.output / (args.module + ".java"), java)
         write_if_changed(args.output / (args.module + ".cpp"), cpp)
     except (ModelError, OSError, ValueError) as error:

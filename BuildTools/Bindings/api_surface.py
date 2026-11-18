@@ -8,7 +8,7 @@ from pathlib import Path
 import sys
 
 
-def build_surface(generator):
+def build_surface(generator, *, target):
     """Use the emitter's effective selection and policies, after successful generation.
 
     One entry per declaration/member keeps changes local in diffs. Named public
@@ -16,20 +16,28 @@ def build_surface(generator):
     with explicit widths. Field and method order is irrelevant to these wrappers,
     while parameter order is retained.
     """
+    if target not in ("wasm32", "native"):
+        raise ValueError(f"Unsupported API surface target: {target}")
     aliases = {name for name, d in generator.types.items() if d["kind"] == "alias"}
 
     def native_type(t):
         qualifiers = " ".join(q for q in ("const", "volatile") if t.get(q))
         kind = t["kind"]
         if kind == "alias" and t["name"] not in aliases:
-            target = dict(t["target"])
+            aliased = dict(t["target"])
             for q in ("const", "volatile"):
-                target[q] = t.get(q, False) or target.get(q, False)
-            return native_type(target)
+                aliased[q] = t.get(q, False) or aliased.get(q, False)
+            return native_type(aliased)
         if kind in ("alias", "named"):
             result = t["name"]
         elif kind == "scalar":
             result = f'{t["name"]}:{t["bits"]}'
+            if target == "native" and t["name"] not in ("bool", "float", "double", "char_s", "char_u"):
+                # Fixed-width aliases can resolve to long on LP64 and long long
+                # on LLP64. Their width and signedness, not that implementation
+                # spelling, determine the binding contract. Keep plain char
+                # distinct: char pointers have string semantics in the backends.
+                result = generator.scalar(t)
         elif kind == "void":
             result = "void"
         elif kind in ("pointer", "reference"):
@@ -108,7 +116,7 @@ def build_surface(generator):
         else:
             raise ValueError(f"Unsupported API surface declaration: {kind}")
         entries[name] = entry
-    return {"schema_version": 1, "target": "wasm32", "entries": entries}
+    return {"schema_version": 1, "target": target, "entries": entries}
 
 
 def format_surface(surface):

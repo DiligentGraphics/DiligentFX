@@ -368,6 +368,13 @@ without translating them into language-specific code.
 - Generate backend glue against the existing Radient interfaces. JS/Wasm,
   Java/JNI, and Swift can consume the same extraction and semantic policies.
 
+The shared `api_surface.py` checker compares the effective binding contract with a
+reviewed baseline. Java and JavaScript generators can emit it with `--surface`;
+Radient runs the check as part of each language's generation target. Each backend
+has a separate baseline because its exposed APIs and target types can differ.
+Only the checker's explicit `--update` command accepts changes after tests have
+been updated; normal generation never modifies the checked-in baseline.
+
 The generator, metadata, explicitly updated API surface baselines, tests, and
 handwritten adapters belong in source control. Generated parser
 models, glue, JS, declarations, and binaries belong in the build/package output.

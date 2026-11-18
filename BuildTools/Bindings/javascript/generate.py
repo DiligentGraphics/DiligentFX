@@ -748,8 +748,8 @@ def main():
         cpp, js, declarations = generator.generate()
         args.output.mkdir(parents=True, exist_ok=True)
         if args.surface:
-            from javascript.api_surface import build_surface, format_surface
-            write(args.surface, format_surface(build_surface(generator)))
+            from api_surface import build_surface, format_surface
+            write(args.surface, format_surface(build_surface(generator, target="wasm32")))
         write(args.output / (args.module + '.cpp'), cpp)
         write(args.output / (args.module + '.mjs'), js)
         write(args.output / (args.module + '.d.mts'), declarations)

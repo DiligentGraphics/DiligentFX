@@ -12,8 +12,14 @@ add_custom_target(Radient-GenerateJava
         --model "${MODEL}" --module Radient --package diligent.radient
         --library RadientJNI --header Radient.h --header RadientMeshPrimitives.h
         --header NativeAdapters.hpp --adapters "${CMAKE_CURRENT_SOURCE_DIR}/../Adapters.json"
-        --output "${GENERATED}"
+        --output "${GENERATED}" --surface "${GENERATED}/api_surface.json"
+    # Generation checks the reviewed contract before JNI or Java compilation.
+    # Only the explicit Python update command may accept a changed baseline.
+    COMMAND ${BINDING_COMMAND} "${BINDING_TOOLS}/api_surface.py"
+        --actual "${GENERATED}/api_surface.json"
+        --baseline "${CMAKE_CURRENT_SOURCE_DIR}/api_surface.json"
     BYPRODUCTS "${GENERATED}/Radient.java" "${GENERATED}/Radient.cpp"
+        "${GENERATED}/api_surface.json"
     COMMENT "Generating Radient Java/JNI bindings"
     VERBATIM)
 add_dependencies(Radient-GenerateJava Radient-GenerateBindingModel)

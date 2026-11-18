@@ -76,7 +76,7 @@ will stop at the comparison). Add or update the corresponding tests, then explic
 accept the generated surface by running this script from the DiligentEngine root:
 
 ```sh
-python DiligentFX/BuildTools/Bindings/javascript/api_surface.py \
+python DiligentFX/BuildTools/Bindings/api_surface.py \
     --actual build/web/DiligentFX/Radient/bindings/javascript/generated/api_surface.json \
     --baseline DiligentFX/Radient/bindings/javascript/api_surface.json --update
 ```
