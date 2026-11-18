@@ -97,6 +97,15 @@ inline jfieldID Field(JNIEnv* Env, jobject Object, const char* Name, const char*
     return Result;
 }
 
+// Descriptor fields belong to the generated declaration, not a user's subclass.
+// Java field hiding must not redirect either defaults or input conversion.
+inline jfieldID Field(JNIEnv* Env, jclass DeclaringClass, const char* Name, const char* Signature)
+{
+    jfieldID Result = Env->GetFieldID(DeclaringClass, Name, Signature);
+    Check(Env);
+    return Result;
+}
+
 inline jobject NewObject(JNIEnv* Env, const char* ClassName, bool Descriptor = false)
 {
     const LocalRef<jclass> Class{Env, Env->FindClass(ClassName)};

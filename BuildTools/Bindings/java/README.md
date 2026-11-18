@@ -211,7 +211,11 @@ cleanup. `CleanerTest` runs in its own JVM and waits for observed destruction
 with a bounded deadline; it does not assume that a single GC request is enough.
 Large-descriptor tests use the default JVM stack, including simultaneous input
 and output storage. Large native values use heap storage while small descriptors
-remain inline.
+remain inline. Subclass field-hiding tests verify that defaults and marshalling
+access the generated declaring class's fields, including concurrent first use.
+Field IDs are resolved once per descriptor and shared by input/output conversion;
+inherited descriptors reuse their base's IDs. The cache retains no Java objects
+or class references, so it does not keep a class loader alive.
 
 Generator tests cover selection, determinism, native defaults, and rejection of
 unsupported shapes. Fixture sources and Java/Python test files are discovered by

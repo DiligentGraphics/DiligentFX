@@ -48,6 +48,7 @@ struct MarshalLeafDesc DILIGENT_DERIVE(MarshalDerivedDesc)
 };
 typedef struct MarshalLeafDesc MarshalLeafDesc;
 #include "DefineRefMacro.h"
+const MarshalDerivedDesc REF DILIGENT_GLOBAL_FUNCTION(EchoDerived)(const MarshalDerivedDesc REF Desc);
 const MarshalLeafDesc REF DILIGENT_GLOBAL_FUNCTION(EchoInherited)(const MarshalLeafDesc REF Desc);
 Uint64 DILIGENT_GLOBAL_FUNCTION(SumInherited)(const MarshalLeafDesc REF Desc);
 #include "UndefRefMacro.h"

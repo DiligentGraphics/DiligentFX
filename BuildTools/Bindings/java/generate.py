@@ -471,11 +471,21 @@ class Generator(BindingAPI):
     def emit_record(self, d):
         name, short = d["name"], self.short(d["name"])
         fields = self.record_fields(name)
+        bases = d.get("bases", [])
+        base_count = len(self.record_fields(bases[0])) if bases else 0
+        cache_setup, field_ids = [], []
+        if base_count:
+            cache_setup.append(f"const auto& BaseFields = Get{self.short(bases[0])}Fields(Env);")
+            field_ids.extend(f"BaseFields[{index}]" for index in range(base_count))
+        if d["fields"]:
+            cache_setup.append(f'const LocalRef<jclass> Class{{Env, Env->FindClass("{self.path}${short}")}};')
         read_first, read_fields, read_computed, write, storage = [], [], [], [], []
         for index, field in enumerate(fields):
             member = identifier(field["name"])
             kind, t = self.shape(field)
             java, jni, sig, suffix = self.info(field)
+            if index >= base_count:
+                field_ids.append(f'Field(Env, Class.Get(), "{member}", "{sig}")')
             if kind not in ("scalar", "string", "record", "fixed_array", "interface", "array") or unalias(field["type"])["kind"] == "reference":
                 raise ModelError(f"Java: unsupported descriptor field {name}::{member}")
             if kind == "array" and t["kind"] == "void" and not t["const"]:
@@ -496,7 +506,7 @@ class Generator(BindingAPI):
                 read_count = write_count = f"FieldCount{index}"
                 read.append(f"const std::uint64_t {read_count} = {count_function}(Out.Value);")
                 write.append(f"const std::uint64_t {write_count} = {count_function}(Value);")
-            read += [f'const jfieldID Field{index} = Field(Env, Object, "{member}", "{sig}");']
+            read += [f"const jfieldID Field{index} = Fields[{index}];"]
             getter = f"Env->Get{suffix}Field(Object, Field{index})"
             if kind == "scalar":
                 lines, expr = self.read(field, getter, "FieldValue" + str(index))
@@ -549,8 +559,27 @@ class Generator(BindingAPI):
                         storage.append(f"std::unique_ptr<Input{child}> Storage{index} = std::make_unique<Input{child}>();")
                         read += [f"Read{child}(Env, FieldValue{index}.Get(), *Out.Storage{index});", f"Out.Value.{member} = Out.Storage{index}->Value;"]
             lines, expr = self.write(field, "Value." + member, "FieldValue" + str(index), count=write_count if kind == "array" else None, validate_required="ValidateRequiredFields")
-            write += [f'const jfieldID Field{index} = Field(Env, Object, "{member}", "{sig}");'] + lines
+            write += [f"const jfieldID Field{index} = Fields[{index}];"] + lines
             write += [f"Env->Set{suffix}Field(Object, Field{index}, {expr});", "Check(Env);"]
+        # Only IDs survive initialization, not JNI class references. The generated
+        # classes share the native entry point's class loader, so their IDs remain
+        # valid for the library's lifetime without pinning that loader. Function-local
+        # static initialization publishes the complete cache safely to all threads;
+        # a failed JNI lookup throws and leaves initialization available for retry.
+        self.cpp.append(f'''static const std::array<jfieldID, {len(fields)}>& Get{short}Fields(JNIEnv* Env)
+{{
+    static const std::array<jfieldID, {len(fields)}> Fields = [Env]()
+    {{
+        (void)Env;
+{self.indent(cache_setup, 8)}
+        return std::array<jfieldID, {len(fields)}>{{
+{self.indent([entry + "," for entry in field_ids], 12)}
+        }};
+    }}();
+    return Fields;
+}}
+''')
+        cached_fields = f"    const auto& Fields = Get{short}Fields(Env);" if fields else f"    (void)Get{short}Fields(Env);"
         reader = f'''struct Input{short}
 {{
     {name} Value{{}};
@@ -559,6 +588,7 @@ class Generator(BindingAPI):
 [[maybe_unused]] static inline void Read{short}(JNIEnv* Env, jobject Object, Input{short}& Out)
 {{
     Require(Env, Object != nullptr, "Required descriptor is null");
+{cached_fields}
 {self.indent(read_first + read_fields + read_computed, 4)}
 }}
 ''' if not self.record_has_const_fields(name) else ''
@@ -566,6 +596,7 @@ class Generator(BindingAPI):
 {{
     (void)ValidateRequiredFields;
     (void)Pending;
+{cached_fields}
 {self.indent(write, 4)}
 }}
 [[maybe_unused]] static inline jobject Write{short}(JNIEnv* Env, const {name}& Value, bool ValidateRequiredFields, Transfers& Pending)
@@ -580,7 +611,6 @@ class Generator(BindingAPI):
         default = self.native_method(SCALARS["void"], [(short, "jobject", "Object")],
                                      [f"ValueStorage<{name}> Defaults;", "Transfers Pending{Env};",
                                       f"Write{short}Fields(Env, Object, Defaults.Get(), false, Pending);", "Pending.Commit();"])
-        bases = d.get("bases", [])
         parent = " extends " + self.short(bases[0]) if bases else ""
         final = "" if name in self.record_bases else "final "
         # Initialize inherited fields from this descriptor's native defaults once.

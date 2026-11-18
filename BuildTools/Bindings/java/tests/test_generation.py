@@ -330,6 +330,28 @@ class GenerationTest(unittest.TestCase):
         with self.assertRaisesRegex(backend.ModelError, "incompatible output result in override"):
             generate(self.model)
 
+    def test_descriptor_field_lookups_are_cached(self):
+        _, cpp = generate(self.model)
+        for name in ("MarshalBaseDesc", "MarshalDerivedDesc", "MarshalLeafDesc", "MarshalNestedVector"):
+            with self.subTest(name=name):
+                begin = cpp.index(f"& Get{name}Fields(JNIEnv* Env)")
+                end = cpp.index(f"struct Input{name}", begin)
+                cache = cpp[begin:end]
+                self.assertIn("static const std::array<jfieldID,", cache)
+                self.assertEqual(cache.count("Env->FindClass("), 1)
+                # Every declared field is resolved only in this one-time cache.
+                fields = declaration(self.model, name)["fields"]
+                self.assertEqual(cache.count("Field(Env, Class.Get(),"), len(fields))
+                if name == "MarshalDerivedDesc":
+                    self.assertIn("GetMarshalBaseDescFields(Env)", cache)
+                    self.assertNotIn('"Tag"', cache)
+                for prefix in ("Read", "Write"):
+                    begin = cpp.index(f"void {prefix}{name}", end)
+                    body = cpp[begin:cpp.index("\n}\n", begin)]
+                    self.assertIn(f"Get{name}Fields(Env)", body)
+                    self.assertNotIn("Field(Env,", body)
+                    self.assertNotIn("FindClass", body)
+
     def test_rejects_multiple_descriptor_bases(self):
         declaration(self.model, "MarshalObjectDesc")["bases"].append("Diligent::TestVector")
         with self.assertRaisesRegex(backend.ModelError, "descriptors support only single inheritance"):

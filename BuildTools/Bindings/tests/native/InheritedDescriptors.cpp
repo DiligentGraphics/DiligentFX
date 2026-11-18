@@ -29,6 +29,11 @@
 namespace Diligent
 {
 
+const MarshalDerivedDesc& EchoDerived(const MarshalDerivedDesc& Desc)
+{
+    return Desc;
+}
+
 const MarshalLeafDesc& EchoInherited(const MarshalLeafDesc& Desc)
 {
     return Desc;
