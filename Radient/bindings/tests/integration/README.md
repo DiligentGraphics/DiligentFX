@@ -7,6 +7,8 @@ their respective test files; test operations are not moved behind native helpers
 
 | Java | JavaScript | Shared cases |
 | --- | --- | --- |
+| `ExportsTest.java` | `exports_tests.mjs` | 3: invalid IDs and integer types, interface-ID fields and constant isolation, morph-target limit |
+| `RendererTest.java` | `renderer_tests.mjs` | 3: CPU renderer/view descriptors and retained references, all effect settings/defaults, frame calls and invalid arguments |
 | `DataBlobTest.java` | `data_blob_tests.mjs` | 11: owning copies, zero initialization, empty scopes, API exclusions, invalid ranges, native size rejection, read-only queries, shared access state, resize, retained scopes, cleanup after exceptions |
 | `SceneTest.java` | `scene_tests.mjs` | 6: resource configuration, names/defaults, hierarchy, transforms/reparenting, visibility/flags, retained scenes |
 | `ComponentsTest.java` | `components_tests.mjs` | 3: all camera fields, all light fields, defaults/validation/removal |
@@ -22,8 +24,8 @@ their respective test files; test operations are not moved behind native helpers
 [`fixtures.properties`](fixtures.properties) supplies the byte patterns, UTF-8
 names, transform inputs and expected matrix, resource configuration, and component
 values to both implementations, along with mesh, texture, material, animation,
-morph, skinning, and import expectations. It uses plain UTF-8 `key=value` lines and
-comma-separated numeric lists, without escapes or continuations. Java reads it
+morph, skinning, import, renderer, and constant expectations. It uses plain UTF-8
+`key=value` lines and comma-separated numeric lists, without escapes or continuations. Java reads it
 with the JDK's `Properties.load(Reader)`; the JS helper reads the same subset.
 Every array/descriptor accessor returns a fresh value so mutation tests do not
 change later tests' inputs or expectations. No generated fixture copies or JSON
@@ -34,7 +36,7 @@ Node runner loads it directly. Browser CTest commands use `--test-data` to pass
 the identical text to the suite. Missing fixtures fail the test rather than use
 fallback values.
 
-The 41 Java cases match their JavaScript counterparts. `AssetFixture.java` and
+The 47 Java cases match their JavaScript counterparts. `AssetFixture.java` and
 `asset_test_helpers.mjs` create the same triangle, retain returned interfaces,
 and poll CPU load status for up to 15 seconds, accepting both `OK` and `PENDING`
 when work is submitted. These tests create no GPU and never wait for uploads.
@@ -73,6 +75,11 @@ Intentional language-specific coverage:
   `TransposeMatrices=false`/`UpdateGlobalMatrices=true` defaults; JS also
   tests omission of these arguments. Java checks native-initialized descriptor
   constructors before the same values round-trip through the scene.
+- Java exposes scalar constants as static final fields and aggregate constants as
+  functions returning independent mutable snapshots. JS also checks its module
+  exports, frozen descriptors, and copied constant-array accessors. Both read the
+  same expected interface-ID fields and verify that mutations cannot change the
+  exported constant.
 - Java uses try-with-resources for the processing-failure case; JS uses `finally`.
   Both verify that write access was released and the written byte remains visible.
 
@@ -87,5 +94,11 @@ share weights and delta values; skinning tests share joint transforms and the
 inverse-bind matrix. The helpers only construct descriptors and invoke public
 bindings; evaluation, deferred propagation, and lifetime assertions stay in Java/JS.
 
-The renderer and export suites remain JavaScript-only for now.
-Extend this mapping when their existing cases are ported to Java.
+All Radient CPU API integration suites now have Java counterparts. The renderer
+suite creates no GPU or attachments: it checks the zero-sized target, all eight
+effect setters, retained snapshots, frame status, and rejection of a null view.
+Java uses native-initialized descriptors where JS passes partial objects, with
+independent shared expectations for the untouched AgX defaults.
+
+Browser initialization, Wasm runtime behavior, and browser golden-image rendering
+remain JavaScript-specific. These ports do not repeat the native GPU render suite.

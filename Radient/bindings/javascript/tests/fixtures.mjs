@@ -32,8 +32,8 @@ export function readFixtures(text) {
         return value === "true";
     }
     function vector(key) {
-        const [x, y, z] = numbers(key);
-        return z === undefined ? {x, y} : {x, y, z};
+        const [x, y, z, w] = numbers(key);
+        return w !== undefined ? {x, y, z, w} : z !== undefined ? {x, y, z} : {x, y};
     }
     return {string, numbers, number, boolean, vector, bytes: key => Uint8Array.from(numbers(key))};
 }

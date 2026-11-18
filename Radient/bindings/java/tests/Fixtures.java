@@ -77,6 +77,14 @@ final class Fixtures {
         return result;
     }
 
+    static RadientFloat4 vector4(String key) {
+        float[] values = floats(key);
+        TestSupport.equal(4, values.length);
+        RadientFloat4 result = new RadientFloat4();
+        result.x = values[0]; result.y = values[1]; result.z = values[2]; result.w = values[3];
+        return result;
+    }
+
     static RadientFloat3 vector3(String key) {
         float[] values = floats(key);
         TestSupport.equal(3, values.length);

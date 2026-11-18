@@ -3,15 +3,13 @@
 Shared suites run against real Radient in Node and a browser, without a GPU.
 The separate browser bootstrap suite uses a real WebGPU device.
 The model and generator tests separately check declarations and metadata.
-Blob, scene, component, mesh, texture, material/edit, animation, morph, skinning,
-and import suites have
-matching Java cases and shared inputs/assets;
+All CPU API suites have matching Java cases and shared inputs/assets;
 see the [integration coverage mapping](../../tests/integration/README.md) for the
 intentional language-specific checks and fixture loading.
 
 | Suite | Executed API |
 | --- | --- |
-| `exports_tests.mjs` | Standalone invalid IDs and the active morph-target limit; named typedefs are checked by generation tests |
+| `exports_tests.mjs` | Standalone invalid IDs, automatically discovered interface IDs, constant isolation, and the active morph-target limit; named typedefs are checked by generation tests |
 | `data_blob_tests.mjs` | Owning factories; size, scoped reads/writes, resize, QueryInterface and disposal |
 | `scene_tests.mjs` | Engine/scene/writer creation and resource configuration; hierarchy, names, flags, visibility, transforms, revisions and commit |
 | `components_tests.mjs` | Camera/light getters/setters; component presence and removal |

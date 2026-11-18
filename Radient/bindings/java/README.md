@@ -77,10 +77,14 @@ for unsigned integer mappings and other marshalling and ownership rules.
 ## Integration coverage
 
 The tests in `tests/` use real Radient objects and print each case to the console.
-They run with `-Xcheck:jni` and require no GPU or browser. The 41 cases mirror the
+They run with `-Xcheck:jni` and require no GPU or browser. The 47 cases mirror the
 existing JavaScript suites, using the same input and expected-value
 [fixtures](../tests/integration/README.md). CTest supplies the fixture path.
 
+- `ExportsTest`: invalid IDs, scalar constant types, interface-ID fields, independent
+  aggregate snapshots, and the active morph-target limit.
+- `RendererTest`: CPU renderer/view descriptors, retained references, all view-effect
+  settings and defaults, frame calls, and null-view rejection.
 - `DataBlobTest`: copied and zero-initialized data, empty scopes, access exclusion,
   resize, interface queries, and lifetimes after wrapper closure.
 - `SceneTest`: CPU engine creation, UTF-8 names, hierarchy enumeration, scalar and
