@@ -163,7 +163,7 @@ public final class ConstantsTest {
             check(Float.isNaN(TestConstantNotANumber));
         });
         run("Constants.MatchNativeCompiler", () -> {
-            TestConstantSnapshot nativeValues = new TestConstantSnapshot();
+            TestConstantSnapshot nativeValues = GetConstantSnapshot();
             equal(nativeValues.SignedByte, TestConstantSignedByte);
             equal(nativeValues.Byte, TestConstantByte);
             equal(nativeValues.Short, TestConstantShort);

@@ -759,6 +759,273 @@
           "reason": "The native adapter computes the byte count."
         }
       }
+    },
+    "Diligent::MarshalStringDesc": {
+      "fields": {
+        "Name": {
+          "nullable": false
+        }
+      }
+    },
+    "Diligent::IMarshalStrings": {
+      "methods": {
+        "SetText": {
+          "parameters": {
+            "Text": {
+              "nullable": true
+            }
+          }
+        },
+        "GetText": {
+          "result": {
+            "nullable": true,
+            "lifetime": "object"
+          }
+        },
+        "ReadText": {
+          "parameters": {
+            "Text": {
+              "lifetime": "object"
+            }
+          }
+        },
+        "ReadTextPointer": {
+          "parameters": {
+            "ppText": {
+              "lifetime": "object"
+            }
+          }
+        }
+      }
+    },
+    "Diligent::CreateMarshalStrings": {
+      "parameters": {
+        "Text": {
+          "nullable": true
+        }
+      }
+    },
+    "Diligent::GetStringDescLabel": {
+      "result": {
+        "nullable": true
+      }
+    },
+    "Diligent::EchoNullableString": {
+      "parameters": {
+        "Text": {
+          "nullable": true
+        }
+      },
+      "result": {
+        "nullable": true
+      }
+    },
+    "Diligent::GetStaticString": {
+      "result": {
+        "lifetime": "static"
+      }
+    },
+    "Diligent::GetInvalidUTF8": {
+      "result": {
+        "lifetime": "static"
+      }
+    },
+    "Diligent::CheckCharacterBytes": {
+      "parameters": {
+        "Bytes": {
+          "length": "ByteCount"
+        }
+      }
+    },
+    "Diligent::MarshalNestedData": {
+      "fields": {
+        "pBytes": {
+          "length": "ByteCount"
+        }
+      }
+    },
+    "Diligent::GetNestedName": {
+      "result": {
+        "nullable": true
+      }
+    },
+    "Diligent::MarshalSnapshotDesc": {
+      "fields": {
+        "Name": {
+          "lifetime": "object",
+          "nullable": false
+        }
+      }
+    },
+    "Diligent::MarshalSnapshotChild": {
+      "fields": {
+        "Label": {
+          "lifetime": "object"
+        }
+      }
+    },
+    "Diligent::IMarshalSnapshots": {
+      "methods": {
+        "GetDesc": {
+          "result": {
+            "lifetime": "object"
+          }
+        },
+        "Update": {
+          "parameters": {
+            "Name": {
+              "nullable": true
+            },
+            "Label": {
+              "nullable": true
+            }
+          }
+        }
+      }
+    },
+    "Diligent::GetStaticDescriptor": {
+      "result": {
+        "lifetime": "static"
+      }
+    },
+    "Diligent::CheckArrayInt8": {
+      "parameters": {
+        "pValues": {
+          "length": "Count"
+        }
+      }
+    },
+    "Diligent::CheckArrayUint8": {
+      "parameters": {
+        "pValues": {
+          "length": "Count"
+        }
+      }
+    },
+    "Diligent::CheckArrayInt16": {
+      "parameters": {
+        "pValues": {
+          "length": "Count"
+        }
+      }
+    },
+    "Diligent::CheckArrayUint16": {
+      "parameters": {
+        "pValues": {
+          "length": "Count"
+        }
+      }
+    },
+    "Diligent::CheckArrayInt32": {
+      "parameters": {
+        "pValues": {
+          "length": "Count"
+        }
+      }
+    },
+    "Diligent::CheckArrayUint32": {
+      "parameters": {
+        "pValues": {
+          "length": "Count"
+        }
+      }
+    },
+    "Diligent::CheckArrayInt64": {
+      "parameters": {
+        "pValues": {
+          "length": "Count"
+        }
+      }
+    },
+    "Diligent::CheckArrayUint64": {
+      "parameters": {
+        "pValues": {
+          "length": "Count"
+        }
+      }
+    },
+    "Diligent::CheckArrayFloat32": {
+      "parameters": {
+        "pValues": {
+          "length": "Count"
+        }
+      }
+    },
+    "Diligent::CheckArrayFloat64": {
+      "parameters": {
+        "pValues": {
+          "length": "Count"
+        }
+      }
+    },
+    "Diligent::CheckArrayBool": {
+      "parameters": {
+        "pValues": {
+          "length": "Count"
+        }
+      }
+    },
+    "Diligent::CheckArrayMode": {
+      "parameters": {
+        "pValues": {
+          "length": "Count"
+        }
+      }
+    },
+    "Diligent::MarshalFixedChild": {
+      "fields": {
+        "pExtra": {
+          "length": "ExtraCount"
+        },
+        "Label": {
+          "nullable": false
+        }
+      }
+    },
+    "Diligent::GetFixedArrays": {
+      "result": {
+        "lifetime": "static"
+      }
+    },
+    "Diligent::GetFixedReadOnlyArrays": {
+      "result": {
+        "lifetime": "static"
+      }
+    },
+    "Diligent::FillIds": {
+      "parameters": {
+        "pIds": {
+          "length": "Capacity",
+          "written": "Written"
+        }
+      }
+    },
+    "Diligent::FillMultiple": {
+      "parameters": {
+        "ppLabel": {
+          "lifetime": "static"
+        }
+      }
+    },
+    "Diligent::MakeFailingOutputs": {
+      "parameters": {
+        "ppInvalid": {
+          "lifetime": "static"
+        }
+      }
+    },
+    "Diligent::MarshalDerivedDesc": {
+      "fields": {
+        "pValues": {
+          "length": "Count"
+        }
+      }
+    },
+    "Diligent::DefaultArrayCount": {
+      "result": {
+        "lifetime": "static",
+        "length": "Count"
+      }
     }
   }
 }

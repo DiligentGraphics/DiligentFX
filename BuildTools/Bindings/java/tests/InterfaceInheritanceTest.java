@@ -82,6 +82,27 @@ public final class InterfaceInheritanceTest {
             }
         });
 
+        run("InterfaceInheritance.FactoryFailuresAndPendingOutputs", () -> {
+            long destroyed = GetDestructionCount();
+            MarshalDesc desc = new MarshalDesc();
+            CreateMarshalObjectResult failure = CreateMarshalObject(desc, MARSHAL_STATUS.MARSHAL_STATUS_FAILED, false);
+            equal(MARSHAL_STATUS.MARSHAL_STATUS_FAILED, failure.returnValue);
+            equal(null, failure.ppObject);
+            equal(0L, GetLiveObjectCount());
+            CreateMarshalObjectResult pending = CreateMarshalObject(desc, MARSHAL_STATUS.MARSHAL_STATUS_PENDING, true);
+            equal(MARSHAL_STATUS.MARSHAL_STATUS_PENDING, pending.returnValue);
+            try (IMarshalObject object = pending.ppObject) {
+                equal(desc.Size, object.GetSize());
+                equal(2L, object.GetRefCount()); // Wrapper plus the active JNI call.
+                equal(0L, GetObjectSize(null));
+                object.close();
+                object.close();
+                throwsType(IllegalStateException.class, () -> GetObjectSize(object));
+            }
+            equal(0L, GetLiveObjectCount());
+            equal(destroyed + 1, GetDestructionCount());
+        });
+
         run("InterfaceInheritance.InheritedCallsAndIndependentOwnership", () -> {
             equal(0L, GetLiveObjectCount());
             long destroyed = GetDestructionCount();

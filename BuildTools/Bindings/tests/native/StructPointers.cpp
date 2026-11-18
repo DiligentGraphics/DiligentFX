@@ -99,4 +99,23 @@ const MarshalNestedPointerDesc* EchoNestedPointerArray(const MarshalNestedPointe
     return pItems;
 }
 
+MarshalReadOnlyPointerDesc GetReadOnlyPointerDesc(Bool Empty)
+{
+    static const MarshalReadOnlyChild Child;
+    return {Empty ? nullptr : &Child};
+}
+
+MarshalReadOnlyArrayDesc GetReadOnlyArrayDesc(Bool Empty)
+{
+    static const MarshalReadOnlyChild Children[] = {{11}, {23}};
+    return {Empty ? nullptr : Children, Empty ? 0u : 2u};
+}
+
+MarshalReadOnlyPointerGroup GetReadOnlyPointerGroup()
+{
+    static const MarshalReadOnlyPointerDesc Pointer = GetReadOnlyPointerDesc(False);
+    static const MarshalReadOnlyArrayDesc   Array   = GetReadOnlyArrayDesc(False);
+    return {&Pointer, &Array};
+}
+
 } // namespace Diligent

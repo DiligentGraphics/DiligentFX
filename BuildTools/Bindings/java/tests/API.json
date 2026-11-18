@@ -17,7 +17,17 @@
       "tests/native/Constants.h",
       "tests/native/Exports.h",
       "java/tests/fixtures/*.h",
-      "tests/native/AggregateConstants.h"
+      "tests/native/AggregateConstants.h",
+      "tests/native/StringMarshalling.h",
+      "tests/native/NestedStructs.h",
+      "tests/native/StructResults.h",
+      "tests/native/FixedArrays.h",
+      "tests/native/OutputParameters.h",
+      "tests/native/OutputBuffers.h",
+      "tests/native/InheritedDescriptors.h",
+      "tests/native/DefaultArguments.h",
+      "tests/native/Structs.h",
+      "tests/native/BorrowedInterfaces.h"
     ],
     "include": [
       "Diligent::IMarshalDerivedBytes",
@@ -96,7 +106,22 @@
       "Diligent::EchoComputedBuffer",
       "Diligent::EchoDerivedComputedBuffer",
       "Diligent::GetComputedBufferChecksum",
-      "Diligent::GetComputedBufferCountQueryCount"
+      "Diligent::GetComputedBufferCountQueryCount",
+      "Diligent::CheckArrayInt8",
+      "Diligent::CheckArrayUint8",
+      "Diligent::CheckArrayInt16",
+      "Diligent::CheckArrayUint16",
+      "Diligent::CheckArrayInt32",
+      "Diligent::CheckArrayUint32",
+      "Diligent::CheckArrayInt64",
+      "Diligent::CheckArrayUint64",
+      "Diligent::CheckArrayFloat32",
+      "Diligent::CheckArrayFloat64",
+      "Diligent::CheckArrayBool",
+      "Diligent::CheckArrayMode",
+      "Diligent::GetReadOnlyPointerDesc",
+      "Diligent::GetReadOnlyArrayDesc",
+      "Diligent::GetReadOnlyPointerGroup"
     ]
   },
   "declarations": {
@@ -155,6 +180,20 @@
         "SetReleaseStatus",
         "UnmapRead"
       ]
+    },
+    "Diligent::IMarshalSnapshots": {
+      "include_methods": [
+        "GetDesc",
+        "Update"
+      ]
+    },
+    "Diligent::MarshalReadOnlyArrayDesc": {
+      "fields": {
+        "pChildren": {
+          "length": "ChildCount",
+          "nullable": true
+        }
+      }
     }
   }
 }

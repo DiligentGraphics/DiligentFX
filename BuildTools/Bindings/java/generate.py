@@ -132,8 +132,6 @@ class Generator(BindingAPI):
             if not isinstance(t["count"], int) or not 0 < t["count"] <= 0x7fffffff:
                 raise ModelError("Java: fixed array extent must be positive and fit jsize")
             element = unalias(t["element"])
-            if t["const"] or element["const"]:
-                raise ModelError("Java: fixed array descriptor fields require writable elements")
             element_kind, _ = self.shape({"type": element})
             if element_kind not in ("scalar", "record", "fixed_array") or element["kind"] in ("pointer", "reference", "void"):
                 raise ModelError("Java: fixed arrays support scalars, descriptors, and nested arrays")
@@ -226,6 +224,8 @@ class Generator(BindingAPI):
         if kind == "array" and target["kind"] == "void" and not target["const"]:
             raise ModelError(f"Java: {context}: writable byte inputs require a copyback adapter")
         if kind == "record":
+            if self.record_has_const_fields(target["name"]):
+                raise ModelError(f"Java: {context}: descriptors with const fields are output-only")
             for field in self.record_fields(target["name"]):
                 self.validate_input(field, target["name"] + "::" + field["name"])
         elif kind == "fixed_array":
@@ -450,6 +450,24 @@ class Generator(BindingAPI):
                 f"const LocalRef<{jni}> {var}{{Env, {allocation}}};",
                 f"if ({var}Count) Env->Set{elem[3]}ArrayRegion({var}.Get(), 0, {var}Count, {var}Data.data());", "Check(Env);"], var + ".Get()"
 
+    def record_has_const_fields(self, name):
+        # Output snapshots may contain const members; assigning them during
+        # input conversion is invalid, including within embedded records/arrays.
+        for field in self.record_fields(name):
+            t = unalias(field["type"])
+            while t["kind"] == "array" and not t["const"]:
+                t = unalias(t["element"])
+            if t["const"]:
+                return True
+            if t["kind"] == "pointer":
+                # Descriptor pointers and pointer/count arrays require their own
+                # input converters too. Const pointees can be constructed in
+                # temporary storage, but their const members cannot be assigned.
+                t = unalias(t["target"])
+            if self.types.get(t.get("name"), {}).get("kind") == "record" and self.record_has_const_fields(t["name"]):
+                return True
+        return False
+
     def emit_record(self, d):
         name, short = d["name"], self.short(d["name"])
         fields = self.record_fields(name)
@@ -533,7 +551,7 @@ class Generator(BindingAPI):
             lines, expr = self.write(field, "Value." + member, "FieldValue" + str(index), count=write_count if kind == "array" else None, validate_required="ValidateRequiredFields")
             write += [f'const jfieldID Field{index} = Field(Env, Object, "{member}", "{sig}");'] + lines
             write += [f"Env->Set{suffix}Field(Object, Field{index}, {expr});", "Check(Env);"]
-        self.cpp.append(f'''struct Input{short}
+        reader = f'''struct Input{short}
 {{
     {name} Value{{}};
 {self.indent(storage, 4)}
@@ -543,7 +561,8 @@ class Generator(BindingAPI):
     Require(Env, Object != nullptr, "Required descriptor is null");
 {self.indent(read_first + read_fields + read_computed, 4)}
 }}
-static inline void Write{short}Fields(JNIEnv* Env, jobject Object, const {name}& Value, bool ValidateRequiredFields, Transfers& Pending)
+''' if not self.record_has_const_fields(name) else ''
+        self.cpp.append(f'''{reader}static inline void Write{short}Fields(JNIEnv* Env, jobject Object, const {name}& Value, bool ValidateRequiredFields, Transfers& Pending)
 {{
     (void)ValidateRequiredFields;
     (void)Pending;
@@ -695,6 +714,11 @@ static inline void Write{short}Fields(JNIEnv* Env, jobject Object, const {name}&
                     expr = var
                 locals_[p["name"]] = expr
                 output = p if kind == "array" else dict(p, type=original["target"])
+                if kind == "string":
+                    # Nullability describes the caller's output slot, not its
+                    # returned pointer. A string output may be null on success
+                    # or failure, just like an interface output.
+                    output = dict(output, policy=dict(output.get("policy", {}), nullable=True))
                 outputs.append((output, expr, var if kind == "interface" else None))
             else:
                 arg = "Arg" + str(len(locals_))

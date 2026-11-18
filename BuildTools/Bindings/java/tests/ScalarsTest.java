@@ -49,6 +49,34 @@ public final class ScalarsTest {
             throwsType(IllegalArgumentException.class, () -> EchoUint32(0x100000000L));
             throwsType(IllegalArgumentException.class, () -> EchoTestMode((short) 256));
         });
+        run("Scalars.OriginalJavaScriptNativeChecks", () -> {
+            check(CheckScalars((byte) -101, 0xfedcba98L, -0x123456789abcdefL, 0xfedcba9876543210L,
+                               1.25f, -2.5, true, MARSHAL_MODE.MARSHAL_MODE_LAST));
+            equal(0xfedcba9876543210L, GetWideConstant());
+            equal(MARSHAL_MODE.MARSHAL_MODE_LAST, EchoMode(MARSHAL_MODE.MARSHAL_MODE_LAST));
+            for (int status : new int[]{MARSHAL_STATUS.MARSHAL_STATUS_OK,
+                    MARSHAL_STATUS.MARSHAL_STATUS_PENDING, MARSHAL_STATUS.MARSHAL_STATUS_FAILED})
+                equal(status, EchoStatus(status));
+            MarshalDesc desc = new MarshalDesc();
+            check(CheckDefaultDesc(desc));
+            desc.Size = 0x123456789abcdef0L;
+            desc.Count = 19;
+            desc.Scale = -3.5f;
+            desc.Weight = 0.125;
+            desc.Enabled = false;
+            desc.Mode = MARSHAL_MODE.MARSHAL_MODE_FIRST;
+            check(CheckCustomDesc(desc));
+            ReadWideOutputResult success = ReadWideOutput(false);
+            equal(MARSHAL_STATUS.MARSHAL_STATUS_OK, success.returnValue);
+            equal(0xfedcba9876543210L, success.pValue);
+            ReadWideOutputResult failure = ReadWideOutput(true);
+            equal(MARSHAL_STATUS.MARSHAL_STATUS_FAILED, failure.returnValue);
+            equal(0L, failure.pValue);
+            RecordValue(0xfedcba98L);
+            equal(0xfedcba98L, GetRecordedValue());
+            equal(0xfedcba9876543210L, EchoEntityID(0xfedcba9876543210L));
+            equal(-1L, GetInvalidEntityID());
+        });
         run("Scalars.NativeExceptionBoundary", () -> {
             throwsType(RuntimeException.class, BindingTests::ThrowNative);
             equal(19, EchoInt32(19));

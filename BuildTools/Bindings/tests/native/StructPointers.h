@@ -69,6 +69,35 @@ struct MarshalNestedPointerDesc
 };
 typedef struct MarshalNestedPointerDesc MarshalNestedPointerDesc;
 
+// These descriptors are output-only: even though their pointers are writable,
+// input conversion cannot assign the const member of the copied child storage.
+struct MarshalReadOnlyChild
+{
+    const Int32 Value DEFAULT_INITIALIZER(7);
+};
+typedef struct MarshalReadOnlyChild MarshalReadOnlyChild;
+
+struct MarshalReadOnlyPointerDesc
+{
+    const MarshalReadOnlyChild* pChild DEFAULT_INITIALIZER(nullptr);
+};
+typedef struct MarshalReadOnlyPointerDesc MarshalReadOnlyPointerDesc;
+
+struct MarshalReadOnlyArrayDesc
+{
+    const MarshalReadOnlyChild* pChildren DEFAULT_INITIALIZER(nullptr);
+    Uint32 ChildCount DEFAULT_INITIALIZER(0);
+};
+typedef struct MarshalReadOnlyArrayDesc MarshalReadOnlyArrayDesc;
+
+// Converter dependencies must also propagate through multiple pointer levels.
+struct MarshalReadOnlyPointerGroup
+{
+    const MarshalReadOnlyPointerDesc* pPointer DEFAULT_INITIALIZER(nullptr);
+    const MarshalReadOnlyArrayDesc* pArray DEFAULT_INITIALIZER(nullptr);
+};
+typedef struct MarshalReadOnlyPointerGroup MarshalReadOnlyPointerGroup;
+
 #include "DefineRefMacro.h"
 Uint64 DILIGENT_GLOBAL_FUNCTION(ReadStructPointer)(const MarshalDesc* pData);
 Uint64 DILIGENT_GLOBAL_FUNCTION(ReadRequiredPointer)(const MarshalDesc* pData);
@@ -80,6 +109,9 @@ const MarshalRequiredPointerDesc REF DILIGENT_GLOBAL_FUNCTION(GetRequiredPointer
 Float64 DILIGENT_GLOBAL_FUNCTION(ReadNestedPointerValue)(const MarshalNestedPointerDesc REF Desc, Uint32 Field);
 const MarshalNestedPointerDesc REF DILIGENT_GLOBAL_FUNCTION(EchoNestedPointerDesc)(const MarshalNestedPointerDesc REF Desc, Bool InvalidLabel);
 const MarshalNestedPointerDesc* DILIGENT_GLOBAL_FUNCTION(EchoNestedPointerArray)(const MarshalNestedPointerDesc* pItems, Uint32 Count);
+MarshalReadOnlyPointerDesc DILIGENT_GLOBAL_FUNCTION(GetReadOnlyPointerDesc)(Bool Empty);
+MarshalReadOnlyArrayDesc DILIGENT_GLOBAL_FUNCTION(GetReadOnlyArrayDesc)(Bool Empty);
+MarshalReadOnlyPointerGroup DILIGENT_GLOBAL_FUNCTION(GetReadOnlyPointerGroup)();
 #include "UndefRefMacro.h"
 
 // clang-format on

@@ -508,12 +508,44 @@ class GenerationTest(unittest.TestCase):
         pointer = deepcopy(declaration(MODEL, "EchoText")["parameters"][0]["type"])
         scalar = deepcopy(declaration(MODEL, "TestFixedArrays")["fields"][0]["type"]["element"])
         for element, error in ((pointer, "fixed arrays support"),
-                               (dict(scalar, const=True), "writable elements"),
+                               (dict(scalar, const=True), "output-only"),
                                (dict(scalar, volatile=True), "volatile")):
             with self.subTest(element=element):
                 model = deepcopy(MODEL)
                 declaration(model, "TestFixedArrays")["fields"][0]["type"]["element"] = element
                 with self.assertRaisesRegex(backend.ModelError, error):
+                    generate(model)
+
+    def test_const_fields_are_supported_as_output_snapshots(self):
+        java, cpp = generate(self.model)
+        self.assertIn("class MarshalFixedReadOnly", java)
+        self.assertIn("WriteMarshalFixedReadOnlyFields", cpp)
+        self.assertNotIn("struct InputMarshalFixedReadOnly\n", cpp)
+        self.assertNotIn("struct InputMarshalFixedReadOnlyElement\n", cpp)
+        self.assertNotIn("struct InputMarshalSnapshotDesc\n", cpp)
+
+    def test_const_pointee_dependencies_are_output_only(self):
+        _, cpp = generate(self.model)
+        for name in ("MarshalReadOnlyChild", "MarshalReadOnlyPointerDesc",
+                     "MarshalReadOnlyArrayDesc", "MarshalReadOnlyPointerGroup"):
+            with self.subTest(record=name):
+                self.assertIn(f"Write{name}Fields", cpp)
+                self.assertNotIn(f"struct Input{name}\n", cpp)
+                model = deepcopy(MODEL)
+                parameter = declaration(model, "ReadRequiredPointer")["parameters"][0]
+                target = backend.unalias(parameter["type"]["target"])
+                parameter["type"]["target"] = dict(target, name="Diligent::" + name)
+                with self.assertRaisesRegex(backend.ModelError, "output-only"):
+                    generate(model)
+
+    def test_rejects_const_fields_in_input_descriptors(self):
+        for record, field_name in [("TestDesc", "Count"), ("TestVector", "X"),
+                                   ("TestFixedChild", "Id")]:
+            with self.subTest(record=record):
+                model = deepcopy(MODEL)
+                field = next(f for f in declaration(model, record)["fields"] if f["name"] == field_name)
+                field["type"]["const"] = True
+                with self.assertRaisesRegex(backend.ModelError, "output-only"):
                     generate(model)
 
     def test_rejects_retained_strings_in_fixed_descriptor_arrays(self):

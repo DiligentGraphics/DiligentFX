@@ -81,6 +81,28 @@ public final class DescriptorPointersTest {
             equal(null, EchoDefaultPointerDesc(defaults).pData);
         });
 
+        run("DescriptorPointers.ConstPointeeSnapshots", () -> {
+            equal(7, new MarshalReadOnlyChild().Value);
+            equal(null, new MarshalReadOnlyPointerDesc().pChild);
+            equal(null, GetReadOnlyPointerDesc(true).pChild);
+            MarshalReadOnlyPointerDesc first = GetReadOnlyPointerDesc(false);
+            MarshalReadOnlyPointerDesc second = GetReadOnlyPointerDesc(false);
+            equal(7, first.pChild.Value);
+            check(first.pChild != second.pChild);
+            first.pChild.Value = 99;
+            equal(7, second.pChild.Value);
+            equal(7, GetReadOnlyPointerDesc(false).pChild.Value);
+
+            MarshalReadOnlyPointerGroup group = GetReadOnlyPointerGroup();
+            equal(7, group.pPointer.pChild.Value);
+            equal(2L, group.pArray.ChildCount);
+            equal(11, group.pArray.pChildren[0].Value);
+            equal(23, group.pArray.pChildren[1].Value);
+            group.pArray.pChildren[0].Value = 99;
+            equal(11, GetReadOnlyPointerGroup().pArray.pChildren[0].Value);
+            equal(null, new MarshalReadOnlyPointerGroup().pArray);
+        });
+
         run("DescriptorPointers.RequiredFieldsAreValidatedAtUse", () -> {
             MarshalRequiredPointerDesc required = new MarshalRequiredPointerDesc();
             equal(null, required.pData); // Incomplete defaults are allowed during construction.

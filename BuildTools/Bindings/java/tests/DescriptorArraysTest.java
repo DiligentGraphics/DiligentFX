@@ -42,6 +42,25 @@ public final class DescriptorArraysTest {
 
     @SuppressWarnings("try")
     public static void main(java.lang.String[] args) {
+        run("DescriptorArrays.ConstElementSnapshots", () -> {
+            MarshalReadOnlyArrayDesc defaults = new MarshalReadOnlyArrayDesc();
+            equal(0L, defaults.ChildCount);
+            equal(null, defaults.pChildren);
+            MarshalReadOnlyArrayDesc empty = GetReadOnlyArrayDesc(true);
+            equal(0L, empty.ChildCount);
+            equal(null, empty.pChildren);
+            MarshalReadOnlyArrayDesc first = GetReadOnlyArrayDesc(false);
+            MarshalReadOnlyArrayDesc second = GetReadOnlyArrayDesc(false);
+            equal(2L, first.ChildCount);
+            equal(2, first.pChildren.length);
+            equal(11, first.pChildren[0].Value);
+            equal(23, first.pChildren[1].Value);
+            check(first.pChildren != second.pChildren);
+            check(first.pChildren[0] != second.pChildren[0]);
+            first.pChildren[0].Value = 99;
+            equal(11, second.pChildren[0].Value);
+            equal(11, GetReadOnlyArrayDesc(false).pChildren[0].Value);
+        });
         run("DescriptorArrays.ContiguousInputsAndNestedFields", () -> {
             MarshalArrayItem a = item(11, "Aé水😀");
             MarshalArrayItem b = item(-29, "second");
@@ -146,6 +165,24 @@ public final class DescriptorArraysTest {
             equal(0L, GetLiveArraySnapshotCount());
             equal("Aé水😀", items[0].Label);
             equal(0xFEDCBA98L, saved.pGroups[1].pItems[0].Id);
+        });
+
+        run("DescriptorArrays.DirectResultsUseExplicitCounts", () -> {
+            float[] saved;
+            try (IMarshalArraySnapshots source = CreateMarshalArraySnapshots().ppObject) {
+                saved = source.GetValues(2);
+                check(Arrays.equals(new float[]{-1.5f, 0.25f}, saved));
+                equal(0, source.GetValues(0).length);
+                equal(41L, source.GetItems(1)[0].Id);
+                throwsType(IllegalArgumentException.class, () -> source.GetValues(4));
+                throwsType(IllegalArgumentException.class, () -> source.GetItems(3));
+                throwsType(IllegalArgumentException.class, () -> source.GetValues(-1));
+                source.Update();
+            }
+            equal(0L, GetLiveArraySnapshotCount());
+            check(Arrays.equals(new float[]{-1.5f, 0.25f}, saved));
+            equal(null, GetInvalidOutputArray(9).pValues);
+            equal(0, GetInvalidOutputArray(10).pValues.length);
         });
 
         run("DescriptorArrays.RoundTripsAndEmptySpans", () -> {

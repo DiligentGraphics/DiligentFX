@@ -27,3 +27,47 @@ exception translation stay beside the Java tests.
 Add portable contracts here, with semantic policy only when the C/C++ declaration
 is ambiguous, then exercise them from every backend that supports that contract.
 Keep backend-specific execution hooks out of the shared native implementation.
+
+## JavaScript and Java coverage
+
+The following suites exercise the same native declarations and implementations.
+The paths in the table are relative to `javascript/tests` and `java/tests`.
+The existing CMake test discovery registers new `*Test.java` files in the Java
+suite already run by CI; no additional action or renderer build is required.
+
+| JavaScript suite | Corresponding Java tests |
+| --- | --- |
+| `test_marshalling.mjs` | `ScalarsTest`, `InterfaceInheritanceTest` |
+| `test_strings.mjs` | `StringMarshallingTest` |
+| `nested_struct_tests.mjs` | `NestedStructsTest` |
+| `struct_result_tests.mjs` | `StructResultsTest` |
+| `input_array_tests.mjs` | `InputArraysTest`, `DescriptorArraysTest` |
+| `output_array_tests.mjs` | `DescriptorArraysTest`, `OutputParametersTest` |
+| `fixed_array_tests.mjs` | `FixedArrayMarshallingTest` |
+| `inheriteddescriptors_tests.mjs` | `InheritedDescriptorsTest` |
+| `structpointers_tests.mjs` | `DescriptorPointersTest` |
+| `outputparameters_tests.mjs`, `outputbuffers_tests.mjs` | `OutputParametersTest` |
+| `borrowedinterfaces_tests.mjs` | `InterfaceInheritanceTest`, `OutputParametersTest` |
+| `interfacereferences_tests.mjs` | `InterfaceInheritanceTest` |
+| `interfacefields_tests.mjs` | `InterfaceFieldsTest`, `DescriptorArraysTest` |
+| `count_method_tests.mjs`, `computedoutputs_tests.mjs` | `ComputedLengthsTest` |
+| `nested_counts_tests.mjs` | `ComputedFieldsTest` |
+| `byte_span_tests.mjs` | `RawBytesTest` |
+| `test_buffers.mjs` | `ScopedBytesTest` |
+| `exports_tests.mjs` | `ConstantsTest`, `ScalarsTest` |
+| `shared_native_tests.mjs` | `ScalarsTest`, `StringsTest`, `DescriptorsTest`, `ArraysTest`, `FixedArraysTest`, `ConstantsTest` |
+| `defaultarguments_tests.mjs` | `DefaultArgumentsTest`, `ComputedLengthsTest` (all arguments supplied explicitly) |
+
+Language-specific behavior remains intentional: Java descriptors are complete
+values rather than partial JavaScript objects, unsigned scalar types widen as
+documented by the Java backend, and malformed UTF-16 input is rejected rather
+than replaced by `TextEncoder`. Required empty Java arrays retain non-null native
+storage; the shared input fixture observes that distinction at count zero.
+
+Wasm growth, module initialization/`wasmBinary`, virtual files, typed-array realms,
+mutable prototypes, JavaScript getters, and Wasm address-range fault injection
+remain JavaScript tests. A native JVM cannot validate arbitrary pointers against
+a Wasm linear-memory range. Java keeps its own concurrent-close, Cleaner, native
+exception, large-stack-input, and runtime-name tests. Temporary Wasm allocation
+instrumentation is not copied into JNI; native reference counts and destruction
+counts verify ownership, and JNI tests run with `-Xcheck:jni`.

@@ -39,12 +39,18 @@ Generated sources are build artifacts. `generate.py` accepts `--model`, `--modul
   Each dimension must be non-null and have exactly the declared length. Defaults
   and output arrays are independent Java snapshots; input arrays are copied into
   the descriptor, with descriptor-element strings retained for the native call.
+  Const fields, including fixed arrays and nested const elements, are supported
+  in output snapshots. Such descriptors, and descriptors pointing to them directly
+  or through pointer/count arrays, are rejected as inputs because their native
+  members cannot be assigned during conversion.
 - Raw `const void*` input spans and `void*` output buffers with byte counts,
   including descriptor fields, borrowed results, and computed counts. These map
   to `byte[]` and preserve every bit, including embedded zeroes and bytes above
   127. JNI copies the bytes directly; typed `Uint8` arrays still use `short[]`.
 - Ordinary UTF-8 strings, copied between native storage and Java UTF-16 strings.
   Nullability follows the model. Embedded NUL and invalid encodings are rejected.
+  For string output parameters, nullability describes the output slot; the
+  returned string itself may be null, including on failure.
 - Copied scalar/enum/interface/descriptor input arrays, borrowed array results,
   and caller-filled output arrays with explicit capacity and optional written count.
   Pointer/count descriptor fields support the same element types. Native struct
