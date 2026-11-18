@@ -188,6 +188,6 @@ void UpdateFixedArrays()
     Arrays.Grid[1][0].Id          = 50;
     Arrays.Matrices[1].Data[15]   = 60.f;
 }
-void   ResetFixedArrays() { Arrays = {}; }
+void   ResetFixedArrays() { Arrays = MarshalFixedArrays{}; }
 Uint32 GetFixedCallCount() { return FixedCallCount; }
 } // namespace Diligent

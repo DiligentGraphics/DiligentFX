@@ -83,33 +83,14 @@ jobs:
         platform:        Linux
         cmake-generator: ${{ matrix.cmake_generator }}
 
-    # Run generic marshalling and real Radient Java integration in one host-JVM job.
-    - name: Set up Java binding test dependencies
-      if: matrix.name == 'Clang' && matrix.build_type == 'Debug'
-      shell: bash
-      run: |
-        # Reuse LLVM 22 and the JDK already installed on the runner.
-        echo "JAVA_HOME=$JAVA_HOME_21_X64" >> "$GITHUB_ENV"
-        echo "RADIENT_JAVA_CMAKE_ARGS=-DRADIENT_BUILD_JAVA_BINDINGS=ON -DRADIENT_BINDINGS_PYTHON_EXECUTABLE=$RUNNER_TEMP/bindings-venv/bin/python -DRADIENT_BINDINGS_LIBCLANG=/usr/lib/llvm-22/lib/libclang-22.so.1" >> "$GITHUB_ENV"
-        python3 -m venv "$RUNNER_TEMP/bindings-venv"
-        "$RUNNER_TEMP/bindings-venv/bin/python" -m pip install -r DiligentFX/BuildTools/Bindings/requirements.txt
-
-    - name: Build Java binding tests
-      if: matrix.name == 'Clang' && matrix.build_type == 'Debug'
-      shell: bash
-      env:
-        CXX: ${{ matrix.cxx }}
-      run: |
-        cmake -S DiligentFX/BuildTools/Bindings/java -B "$RUNNER_TEMP/binding-java" -G Ninja \
-          -DCMAKE_BUILD_TYPE=Debug \
-          -DBINDINGS_PYTHON_EXECUTABLE="$RUNNER_TEMP/bindings-venv/bin/python" \
-          -DBINDINGS_LIBCLANG=/usr/lib/llvm-22/lib/libclang-22.so.1
-        cmake --build "$RUNNER_TEMP/binding-java" --parallel "$(nproc)"
-
-    - name: Test Java bindings
-      if: matrix.name == 'Clang' && matrix.build_type == 'Debug'
-      shell: bash
-      run: ctest --test-dir "$RUNNER_TEMP/binding-java" --verbose --output-on-failure --no-tests=error
+    # Run Java marshalling and Radient integration tests in GCC/Clang Debug and Release.
+    - name: Set up Java binding tests
+      if: matrix.name == 'GCC' || matrix.name == 'Clang'
+      uses: DiligentGraphics/github-action/setup-java-binding-tests@v36
+      with:
+        configuration: ${{ matrix.build_type }}
+        cc: ${{ matrix.cc }}
+        cxx: ${{ matrix.cxx }}
 
     - name: Configure CMake
       if:   success()
@@ -127,11 +108,10 @@ jobs:
       if: success()
       uses: DiligentGraphics/github-action/build@v35
 
-    # The main build produces the JNI library and Java classes using the same Radient target.
-    - name: Test Radient Java bindings
-      if: matrix.name == 'Clang' && matrix.build_type == 'Debug'
-      shell: bash
-      run: ctest --test-dir "${{ runner.workspace }}/build/DiligentFX/Radient/bindings/java/tests" --verbose --output-on-failure --no-tests=error
+    # Reuse the JNI library and Java classes produced by the main build.
+    - name: Test Java bindings
+      if: matrix.name == 'GCC' || matrix.name == 'Clang'
+      uses: DiligentGraphics/github-action/run-java-binding-tests@v36
 
     - name: RadientTest
       if:   success()
