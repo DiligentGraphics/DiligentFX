@@ -180,6 +180,14 @@ def constant_value(cursor):
             raise ModelError("Only narrow string constants are supported")
         return ast.literal_eval("b" + spelling).decode("utf-8")
 
+    # Aggregates are decoded member by member. Passing an array of records to
+    # clang_Cursor_Evaluate can crash libclang, and provides no aggregate value.
+    if expression and expression.kind == cindex.CursorKind.INIT_LIST_EXPR:
+        native_type = expression.type.get_canonical()
+        elements = [child for child in expression.get_children() if child.kind.is_expression()]
+        if native_type.kind in (cindex.TypeKind.CONSTANTARRAY, cindex.TypeKind.RECORD):
+            return aggregate_value(native_type, elements)
+
     library = clang_library()
     evaluation = library.clang_Cursor_Evaluate(cursor)
     if evaluation:
@@ -212,11 +220,6 @@ def constant_value(cursor):
                 native_type.is_const_qualified() and
                 native_type.element_type.kind in (cindex.TypeKind.CHAR_S, cindex.TypeKind.CHAR_U)):
             return constant_value(declaration)
-    if expression and expression.kind == cindex.CursorKind.INIT_LIST_EXPR:
-        native_type = expression.type.get_canonical()
-        elements = [child for child in expression.get_children() if child.kind.is_expression()]
-        if native_type.kind in (cindex.TypeKind.CONSTANTARRAY, cindex.TypeKind.RECORD):
-            return aggregate_value(native_type, elements)
     raise ModelError(f"{qualified_name(cursor)}: unsupported constant initializer")
 
 

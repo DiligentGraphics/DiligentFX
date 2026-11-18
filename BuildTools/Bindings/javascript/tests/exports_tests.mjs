@@ -1,4 +1,21 @@
 export function registerTests({test, assert, api, constants}) {
+    test("string constants preserve escaping, Unicode, and embedded nulls", () => {
+        assert.equal(api.MarshalEscapedName, "quote\" slash\\ line\n\t\u00e9 \ud83d\ude42");
+        assert.equal(api.GetEscapedExportName(), api.MarshalEscapedName);
+        assert.equal(api.MarshalEmptyName, "");
+        assert.equal(api.MarshalEmbeddedNullName, "a\0b");
+    });
+    test("nested aggregate constants match the native compiler and preserve their values", () => {
+        assert.equal(api.CheckNestedExport(api.MarshalNestedConstant), true);
+        assert.equal(api.MarshalNestedConstant.Leaves[0].A, 11n);
+        assert.equal(api.MarshalNestedConstant.Leaves[1].A, 5n);
+        assert.deepEqual(Array.from(api.MarshalNestedConstant.Grid, row => Array.from(row)), [[-2, 3], [4, -5]]);
+        const value = api.MarshalNestedConstant;
+        value.Named.Parts[1] = 99;
+        value.Grid[0][0] = 99;
+        assert.throws(() => {value.Leaves[0].A = 0n;}, TypeError);
+        assert.equal(api.CheckNestedExport(api.MarshalNestedConstant), true);
+    });
     test("inherited constants preserve base fields and match their compiled native values", () => {
         assert.deepEqual(constants.MarshalInherited, {A: 0xfedcba9876543210n, B: 13, C: 1.5});
         assert.deepEqual(constants.MarshalInheritedDefault, {A: 5n, B: 7, C: 0.5});

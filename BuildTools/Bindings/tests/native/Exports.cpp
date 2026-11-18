@@ -25,6 +25,7 @@
  */
 
 #include "Exports.h"
+#include <cstring>
 
 namespace Diligent
 {
@@ -39,5 +40,28 @@ Bool CheckInheritedExport(const MarshalExportLeaf& Value, Bool UseDefaults)
     const MarshalExportLeaf& Expected = UseDefaults ? MarshalInheritedDefault : MarshalInherited;
     return Value.A == Expected.A && Value.B == Expected.B && Value.C == Expected.C;
 }
+
+Bool CheckNestedExport(const MarshalExportGroup& Value)
+{
+    const MarshalExportGroup& Expected = MarshalNestedConstant;
+    if (Value.Named.Name == nullptr || std::strcmp(Value.Named.Name, Expected.Named.Name) != 0 ||
+        Value.Named.Invalid != Expected.Named.Invalid)
+        return False;
+    for (Uint32 i = 0; i < 2; ++i)
+    {
+        if (Value.Named.Parts[i] != Expected.Named.Parts[i] ||
+            Value.Leaves[i].A != Expected.Leaves[i].A || Value.Leaves[i].B != Expected.Leaves[i].B ||
+            Value.Leaves[i].C != Expected.Leaves[i].C)
+            return False;
+        for (Uint32 j = 0; j < 2; ++j)
+        {
+            if (Value.Grid[i][j] != Expected.Grid[i][j])
+                return False;
+        }
+    }
+    return True;
+}
+
+const Char* GetEscapedExportName() { return MarshalEscapedName; }
 
 } // namespace Diligent

@@ -15,7 +15,9 @@
       "tests/native/Counters.h",
       "tests/native/FixedDescriptorArrays.h",
       "tests/native/Constants.h",
-      "java/tests/fixtures/*.h"
+      "tests/native/Exports.h",
+      "java/tests/fixtures/*.h",
+      "tests/native/AggregateConstants.h"
     ],
     "include": [
       "Diligent::IMarshalDerivedBytes",

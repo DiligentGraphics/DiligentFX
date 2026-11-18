@@ -26,6 +26,7 @@
 
 #pragma once
 
+#include "AggregateConstants.h"
 #include "Arrays.h"
 #include "BorrowedInterfaces.h"
 #include "Buffers.h"

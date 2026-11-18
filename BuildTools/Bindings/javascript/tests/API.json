@@ -193,7 +193,13 @@
       "Diligent::EchoNestedCount",
       "Diligent::EchoComputedBuffer",
       "Diligent::GetComputedBufferChecksum",
-      "Diligent::GetComputedBufferCountQueryCount"
+      "Diligent::GetComputedBufferCountQueryCount",
+      "Diligent::MarshalEscapedName",
+      "Diligent::MarshalEmptyName",
+      "Diligent::MarshalEmbeddedNullName",
+      "Diligent::MarshalNestedConstant",
+      "Diligent::CheckNestedExport",
+      "Diligent::GetEscapedExportName"
     ]
   },
   "declarations": {

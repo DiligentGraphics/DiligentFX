@@ -57,6 +57,7 @@ class Generator(BindingAPI):
         self.cpp = []
         self.native = []
         self.counter = 0
+        self.constant_counter = 0
         for name, function in self.field_count_functions.items():
             owner, _, member = name.rpartition("::")
             field = next(f for f in self.types[owner]["fields"] if f["name"] == member)
@@ -886,6 +887,106 @@ static inline void Write{short}Fields(JNIEnv* Env, jobject Object, const {name}&
             return str(value) + "L"
         return str(value)
 
+    def constant_helper(self, result, parameters, lines):
+        while True:
+            name = "constant" + str(self.constant_counter)
+            self.constant_counter += 1
+            if name not in self.names:
+                break
+        self.names[name] = "constant initializer"
+        self.java.append(f"    private static {result} {name}({parameters}) {{\n{self.indent(lines, 8)}\n    }}\n")
+        return name
+
+    def constant_aggregate(self, java, allocation, assignments):
+        # Java initializes arrays to zero. Avoid emitting an assignment for each
+        # zero in a potentially large table, but preserve negative floating zero.
+        if not assignments:
+            return allocation
+        # Aggregate expressions refer to child factories, so each assignment has
+        # bounded bytecode. Bound both leaf helpers and their callers: even large
+        # arrays of descriptors must stay below Java's 64 KiB method limit.
+        batch_size = 128
+        while len(assignments) > batch_size:
+            calls = []
+            for offset in range(0, len(assignments), batch_size):
+                helper = self.constant_helper("void", java + " Value", assignments[offset:offset + batch_size])
+                calls.append(helper + "(Value);")
+            assignments = calls
+        factory = self.constant_helper(java, "", [f"{java} Value = {allocation};", *assignments, "return Value;"])
+        return factory + "()"
+
+    def constant_value(self, declaration, value):
+        """Build independent Java values from the language-neutral constant model."""
+        t = unalias(declaration["type"])
+        if t.get("volatile"):
+            raise ModelError("Java: volatile constants require an adapter")
+        if t["kind"] in ("array", "pointer"):
+            element = unalias(t["element"] if t["kind"] == "array" else t["target"])
+            if element.get("volatile"):
+                raise ModelError("Java: volatile constants require an adapter")
+            ordinary_char = element.get("name") in ("char_s", "char_u")
+            if ordinary_char and t["kind"] == "pointer" and element["const"]:
+                if isinstance(value, str):
+                    return "java.lang.String", json.dumps(value)
+                if value is None:
+                    return "java.lang.String", "null"
+            if (t["kind"] == "array" and isinstance(value, str) and
+                    element.get("name") in ("char_s", "char_u", "schar", "uchar")):
+                # Only standalone plain-char arrays represent text. Explicit
+                # signed/unsigned byte arrays (including Int8/Uint8 aliases) and
+                # all descriptor array fields retain their numeric array type.
+                if ordinary_char and declaration.get("kind") == "constant":
+                    return "java.lang.String", json.dumps(value)
+                value = list(value.encode("utf-8"))
+                value += [0] * max(0, t["count"] - len(value))
+                if self.scalar(element) == "i8":
+                    value = [byte if byte < 128 else byte - 256 for byte in value]
+        info = self.scalar_info(t)
+        if info and info[0] != "void":
+            return info[0], self.scalar_literal(t, value)
+        if t["kind"] == "array":
+            if (not isinstance(value, list) or len(value) != t["count"] or
+                    not 0 < t["count"] <= 0x7fffffff):
+                raise ModelError("Java: constant array values must match their declared extent and fit jsize")
+            elements = [self.constant_value({"type": t["element"]}, item) for item in value]
+            java = elements[0][0] + "[]"
+            # Insert the outer extent before any inner unsized dimensions.
+            allocation = "new " + java.replace("[]", f"[{t['count']}]", 1)
+            default_literals = {"0", "0L", "false", "null", "0x0.0p+0", "0x0.0p+0f"}
+            assignments = [f"Value[{index}] = {expr};" for index, (_, expr) in enumerate(elements)
+                           if expr not in default_literals]
+            return java, self.constant_aggregate(java, allocation, assignments)
+        if t["kind"] == "pointer" and value is None:
+            # Null pointer fields carry no native storage or ownership. Preserve
+            # their declared Java type, including nullable arrays and descriptors.
+            return self.info(declaration)[0], "null"
+        if self.types.get(t.get("name"), {}).get("kind") == "record":
+            fields = self.record_fields(t["name"])
+            if not isinstance(value, dict) or value.keys() != {f["name"] for f in fields}:
+                raise ModelError("Java: constant descriptor values must include every inherited and direct field")
+            java = self.short(t["name"])
+            assignments = []
+            for field in fields:
+                _, expr = self.constant_value(field, value[field["name"]])
+                assignments.append(f"Value.{identifier(field['name'])} = {expr};")
+            # Skip the native-default constructor: the extracted constant already
+            # contains all defaults, and every mutable child is rebuilt above.
+            return java, self.constant_aggregate(java, f"new {java}(false)", assignments)
+        raise ModelError("Java: unsupported constant type; native addresses require an adapter")
+
+    def emit_constant(self, d):
+        if d.get("policy", {}).get("binding", "automatic") != "automatic":
+            raise ModelError(f"Java: manual constant requires an adapter: {d['name']}")
+        java, expr = self.constant_value(d, d["value"])
+        name = self.short(d["name"])
+        if java == "java.lang.String" or self.scalar_info(d["type"]):
+            self.java.append(f"    public static final {java} {name} = {expr};\n")
+        else:
+            # Java final protects the reference, not the contents. An accessor
+            # avoids exposing shared mutable descriptor or array constants.
+            self.java.append(f"    /** Returns an independent snapshot of the native constant. */\n"
+                             f"    public static {java} {name}() {{ return {expr}; }}\n")
+
     def emit_interface_casts(self):
         # State.kind identifies the pointer's original interface type. Use C++
         # conversions for inherited calls and derived arguments; never reinterpret
@@ -972,12 +1073,7 @@ static inline void Write{short}Fields(JNIEnv* Env, jobject Object, const {name}&
                 short = self.short(d["name"])
                 self.java.append(f"    public static final class {short} {{\n        private {short}() {{}}\n{self.indent(values, 8)}\n    }}\n")
             elif d["kind"] == "constant":
-                if d.get("policy", {}).get("binding", "automatic") != "automatic":
-                    raise ModelError(f"Java: manual constant requires an adapter: {d['name']}")
-                info = self.scalar_info(d["type"])
-                if not info or info[0] == "void":
-                    raise ModelError(f"Java: only scalar constants are supported: {d['name']}")
-                self.java.append(f"    public static final {info[0]} {self.short(d['name'])} = {self.scalar_literal(d['type'], d['value'])};\n")
+                self.emit_constant(d)
             elif d["kind"] == "function":
                 self.java.append("    " + self.emit_function(d) + "\n")
         queries = []

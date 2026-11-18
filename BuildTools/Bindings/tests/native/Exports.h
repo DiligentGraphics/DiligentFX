@@ -44,6 +44,9 @@ static DILIGENT_CONSTEXPR Float32 MarshalDefaultScale = 1.25f;
 static DILIGENT_CONSTEXPR Bool MarshalDefaultEnabled = True;
 static DILIGENT_CONSTEXPR Char MarshalAnimationName[] = "Translation";
 static const Char* const MarshalAnimationNamePointer = MarshalAnimationName;
+static DILIGENT_CONSTEXPR Char MarshalEscapedName[] = "quote\" slash\\ line\n\t" "\xc3\xa9 \xf0\x9f\x99\x82";
+static DILIGENT_CONSTEXPR Char MarshalEmptyName[] = "";
+static DILIGENT_CONSTEXPR Char MarshalEmbeddedNullName[] = "a\0b";
 static DILIGENT_CONSTEXPR Uint64 MarshalLookup[] = {0, 0xfedcba9876543210ull};
 struct MarshalExportNames
 {
@@ -69,11 +72,26 @@ typedef struct MarshalExportLeaf MarshalExportLeaf;
 static DILIGENT_CONSTEXPR MarshalExportLeaf MarshalInherited = {{{0xfedcba9876543210ull}, 13}, 1.5f};
 static DILIGENT_CONSTEXPR MarshalExportLeaf MarshalInheritedDefault = {};
 
+struct MarshalExportGroup
+{
+    MarshalExportNames Named;
+    MarshalExportLeaf Leaves[2];
+    Int16 Grid[2][2];
+};
+typedef struct MarshalExportGroup MarshalExportGroup;
+static DILIGENT_CONSTEXPR MarshalExportGroup MarshalNestedConstant = {
+    {MarshalAnimationName, ~0ull, {3, 5}},
+    {{{{11}, 13}, 1.5f}, {}},
+    {{-2, 3}, {4, -5}}
+};
+
 MarshalEntityAlias DILIGENT_GLOBAL_FUNCTION(EchoEntityID)(MarshalEntityAlias Value);
 MarshalEntityID DILIGENT_GLOBAL_FUNCTION(GetInvalidEntityID)(void);
 #include "DefineRefMacro.h"
 Uint32 DILIGENT_GLOBAL_FUNCTION(SumExportParts)(const MarshalExportNames REF Value);
 Bool DILIGENT_GLOBAL_FUNCTION(CheckInheritedExport)(const MarshalExportLeaf REF Value, Bool UseDefaults);
+Bool DILIGENT_GLOBAL_FUNCTION(CheckNestedExport)(const MarshalExportGroup REF Value);
+const Char* DILIGENT_GLOBAL_FUNCTION(GetEscapedExportName)(void);
 #include "UndefRefMacro.h"
 
 // clang-format on

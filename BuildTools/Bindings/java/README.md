@@ -18,6 +18,18 @@ Generated sources are build artifacts. `generate.py` accepts `--model`, `--modul
 - Scalar constants become Java `static final` compile-time constants. Integer,
   boolean, floating-point, and enum values use the same Java types as parameters;
   Uint64 constants preserve all bits in a signed Java `long`.
+- String constants (character arrays and string pointers) become
+  `public static final java.lang.String` fields with their extracted contents.
+  Aggregate constants become no-argument accessors with the native constant's
+  name, for example `MarshalNames()`. Every call constructs fresh descriptors and
+  arrays, including inherited fields, nested records, and multidimensional arrays;
+  modifying a snapshot cannot change subsequent results. Constants are emitted
+  from the shared model without JNI calls or native default initialization.
+  String-initialized character-array descriptor fields retain their numeric
+  array type, with UTF-8 bytes and native zero padding. Explicit signed/unsigned
+  byte arrays, including `Int8`/`Uint8` aliases, use `byte[]`/`short[]` even for
+  standalone constants. Large arrays use zero initialization
+  and bounded helpers to stay within Java's per-method bytecode limit.
 - Descriptors with scalar, string, interface, nested descriptor, and pointer/count
   array fields, preserving single inheritance and covariant interface returns. Construction
   obtains defaults from native C++ initialization, including incomplete defaults
@@ -125,8 +137,8 @@ original wrapper's ownership.
 This first backend does not yet cover the entire JavaScript surface. Unsupported
 shapes fail generation: callbacks, multiple interface bases,
 mutable descriptor pointees, recursive descriptor graphs, read-only fixed-array
-fields, inout parameters, and non-scalar
-constant exports. Native default arguments may be present, but Java callers
+fields, inout parameters, and non-null native-address constant exports.
+Native default arguments may be present, but Java callers
 currently supply every input argument.
 Radient selection, packaging, Android integration, and rendering are later steps.
 

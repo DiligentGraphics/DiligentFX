@@ -522,23 +522,71 @@ class GenerationTest(unittest.TestCase):
         with self.assertRaisesRegex(backend.ModelError, "TestFixedChild::Label.*call lifetime"):
             generate(self.model)
 
-    def test_rejects_non_scalar_constants(self):
-        types = [declaration(MODEL, "EchoText")["result"]["type"],
-                 declaration(MODEL, "TestFixedArrays")["fields"][0]["type"],
-                 declaration(MODEL, "TestDesc")["fields"][4]["type"]]
-        for native_type in types:
-            with self.subTest(native_type=native_type):
-                model = deepcopy(MODEL)
-                declaration(model, "TestConstantInvalidID")["type"] = deepcopy(native_type)
-                with self.assertRaisesRegex(backend.ModelError, "only scalar constants"):
+    def test_constants_use_java_literals_and_fresh_snapshots(self):
+        java, cpp = generate(self.model)
+        self.assertIn('public static final java.lang.String MarshalAnimationName = "Translation";', java)
+        self.assertIn("public static long[] MarshalLookup()", java)
+        self.assertIn("public static MarshalExportGroup MarshalNestedConstant()", java)
+        self.assertIn("new MarshalExportGroup(false)", java)
+        self.assertIn("new MarshalExportLeaf(false)", java)
+        self.assertNotIn("new MarshalExportGroup()", java)
+        self.assertNotIn("Diligent::MarshalNestedConstant", cpp)
+
+    def test_zero_constant_array_uses_compact_initialization(self):
+        java, _ = generate(self.model)
+        self.assertIn("MarshalZeroLookup() { return new int[16384]; }", java)
+
+    def test_character_array_constant_signedness(self):
+        for name, java_type, first, second in (("char_s", "byte[]", -61, -87),
+                                              ("schar", "byte[]", -61, -87),
+                                              ("char_u", "short[]", 195, 169),
+                                              ("uchar", "short[]", 195, 169)):
+            with self.subTest(name=name):
+                native = {"kind": "scalar", "name": name, "bits": 8, "const": False, "volatile": False}
+                array = {"kind": "array", "count": 4, "element": native, "const": False, "volatile": False}
+                generator = backend.Generator(self.model, "Fixture", "example.api", "FixtureJNI", ["API.h"], ADAPTERS)
+                java, expression = generator.constant_value({"type": array}, "\u00e9")
+                self.assertEqual(java, java_type)
+                self.assertIn(f"Value[0] = {first};", "\n".join(generator.java))
+                self.assertIn(f"Value[1] = {second};", "\n".join(generator.java))
+                self.assertIn("new " + java_type.replace("[]", "[4]"), "\n".join(generator.java))
+                self.assertTrue(expression.endswith("()"))
+
+    def test_character_constants_do_not_bypass_qualifier_validation(self):
+        for kind in ("array", "pointer"):
+            with self.subTest(kind=kind):
+                native = {"kind": "scalar", "name": "char_s", "bits": 8, "const": True, "volatile": True}
+                value_type = {"kind": kind, "const": False, "volatile": False}
+                value_type.update({"count": 4, "element": native} if kind == "array" else {"target": native})
+                generator = backend.Generator(self.model, "Fixture", "example.api", "FixtureJNI", ["API.h"], ADAPTERS)
+                with self.assertRaisesRegex(backend.ModelError, "volatile constants"):
+                    generator.constant_value({"type": value_type, "kind": "constant"}, "foo")
+
+    def test_constant_values_must_match_aggregate_types(self):
+        for name, value, error in [("MarshalLookup", [0], "declared extent"),
+                                   ("MarshalNames", {}, "every inherited and direct field"),
+                                   ("MarshalInherited", {"B": 13, "C": 1.5}, "every inherited and direct field")]:
+            with self.subTest(name=name):
+                model = deepcopy(self.model)
+                declaration(model, name)["value"] = value
+                with self.assertRaisesRegex(backend.ModelError, error):
                     generate(model)
 
-    def test_rejects_manual_constant_without_adapter(self):
-        declaration(self.model, "TestConstantInvalidID")["policy"] = {
-            "binding": "manual", "reason": "The constant needs a language adapter."
-        }
-        with self.assertRaisesRegex(backend.ModelError, "manual constant requires an adapter.*TestConstantInvalidID"):
+    def test_rejects_native_address_constants(self):
+        constant = declaration(self.model, "MarshalAnimationNamePointer")
+        constant["value"] = 123
+        with self.assertRaisesRegex(backend.ModelError, "native addresses require an adapter"):
             generate(self.model)
+
+    def test_rejects_manual_constant_without_adapter(self):
+        for name in ("TestConstantInvalidID", "MarshalAnimationName", "MarshalLookup", "MarshalNames"):
+            with self.subTest(name=name):
+                model = deepcopy(self.model)
+                declaration(model, name)["policy"] = {
+                    "binding": "manual", "reason": "The constant needs a language adapter."
+                }
+                with self.assertRaisesRegex(backend.ModelError, "manual constant requires an adapter.*" + name):
+                    generate(model)
 
     def test_rejects_constant_runtime_name_collision(self):
         declaration(self.model, "TestConstantInvalidID")["name"] = "Diligent::CLEANER"
