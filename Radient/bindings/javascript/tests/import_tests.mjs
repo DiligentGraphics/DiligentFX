@@ -50,9 +50,15 @@ export function registerTests({test, assert, api, constants, testData}) {
     });
 
     test("OBJ ImportScene marshals both outputs and resolves a relative material library", async t => {
-        const f = createAssetFixture(t, api, assert, constants, testData);
+        const created = api.CreateRadientFilesystemAssetResolver({BaseDirectory: "/assets"});
+        assert.equal(created.status, OK);
+        const resolver = created.value;
+        t.after(() => resolver?.dispose());
+        assert.equal(typeof resolver.OpenAsset, "undefined");
+        const f = createAssetFixture(t, api, assert, constants, testData, {Assets: {pAssetResolver: resolver}});
+        resolver.dispose(); // The engine must retain the resolver during asynchronous loading.
         const importer = f.keep(f.value(f.engine.CreateSceneImporter(f.writer)));
-        const result = importer.ImportScene({URI: "/assets/obj/triangle.obj", ImporterId: "obj"}, {Name: f.data.string("import.objInstanceName")});
+        const result = importer.ImportScene({URI: "obj/triangle.obj", ImporterId: "obj"}, {Name: f.data.string("import.objInstanceName")});
         assert.ok(result.status === OK || result.status === PENDING);
         const {ppScene: asset, RootEntity: root} = result.value;
         f.keep(asset);

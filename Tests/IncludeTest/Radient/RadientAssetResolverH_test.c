@@ -43,16 +43,18 @@ void RadientAssetResolver_C_TestMacros(IRadientAssetResolver* pAssetResolver,
                                        IRadientAssetLocation* pLocation,
                                        IRadientAssetData*     pAssetData)
 {
-    RadientAssetResolveInfo ResolveInfo = {0};
-    const char*             LocationURI = IRadientAssetLocation_GetLocation(pLocation);
-    const void*             pData       = IRadientAssetData_GetData(pAssetData);
-    size_t                  DataSize    = IRadientAssetData_GetSize(pAssetData);
-    const char*             ResolvedURI = IRadientAssetData_GetResolvedURI(pAssetData);
-    RADIENT_STATUS          Status      = RADIENT_STATUS_OK;
+    RadientFilesystemAssetResolverCreateInfo CreateInfo  = {0};
+    RadientAssetResolveInfo                  ResolveInfo = {0};
+    const char*                              LocationURI = IRadientAssetLocation_GetLocation(pLocation);
+    const void*                              pData       = IRadientAssetData_GetData(pAssetData);
+    size_t                                   DataSize    = IRadientAssetData_GetSize(pAssetData);
+    const char*                              ResolvedURI = IRadientAssetData_GetResolvedURI(pAssetData);
+    RADIENT_STATUS                           Status      = RADIENT_STATUS_OK;
 
     Status = IRadientAssetResolver_ResolveAssetLocation(pAssetResolver, &ResolveInfo, &pLocation);
     Status = IRadientAssetResolver_CheckAsset(pAssetResolver, pLocation);
     Status = IRadientAssetResolver_OpenAsset(pAssetResolver, pLocation, &pAssetData);
+    Status = Diligent_CreateRadientFilesystemAssetResolver(&CreateInfo, &pAssetResolver);
     Status = Diligent_CheckAsset(pAssetResolver, &ResolveInfo);
     Status = Diligent_OpenAsset(pAssetResolver, &ResolveInfo, &pAssetData);
 

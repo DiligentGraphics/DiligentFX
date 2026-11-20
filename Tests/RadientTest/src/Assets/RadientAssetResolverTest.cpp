@@ -32,6 +32,7 @@
 #include "gtest/gtest.h"
 
 #include <fstream>
+#include <filesystem>
 #include <string>
 
 using namespace Diligent;
@@ -169,4 +170,104 @@ TEST(RadientAssetResolverTest, ChecksFilesystemAssetAvailability)
     ASSERT_NE(pMissingLocation, nullptr);
     EXPECT_EQ(pResolver->CheckAsset(pMissingLocation), RADIENT_STATUS_NOT_FOUND);
     EXPECT_EQ(CheckAsset(pResolver, {"missing.bin", BaseURI.c_str()}), RADIENT_STATUS_NOT_FOUND);
+}
+
+TEST(RadientAssetResolverTest, PublicFactoryUsesBaseDirectoryAndOwnsConfiguration)
+{
+    TempDirectory     TempDir{"RadientResolverFactoryTest"};
+    std::string       Directory = TempDir.Get();
+    const std::string Path      = Directory + "/asset.bin";
+    {
+        std::ofstream File{Path, std::ios::binary};
+        File << "data";
+    }
+    RadientFilesystemAssetResolverCreateInfo CI;
+    CI.BaseDirectory = Directory.c_str();
+    EXPECT_EQ(CreateRadientFilesystemAssetResolver(CI, nullptr), RADIENT_STATUS_INVALID_ARGUMENT);
+    RefCntAutoPtr<IRadientAssetResolver> Resolver;
+    ASSERT_EQ(CreateRadientFilesystemAssetResolver(CI, &Resolver), RADIENT_STATUS_OK);
+    Directory.assign("changed");
+    RefCntAutoPtr<IRadientAssetData> Data;
+    ASSERT_EQ(OpenAsset(Resolver, {"asset.bin"}, &Data), RADIENT_STATUS_OK);
+    EXPECT_EQ(Data->GetSize(), 4u);
+    EXPECT_EQ((std::string{static_cast<const char*>(Data->GetData()), Data->GetSize()}), "data");
+    for (const auto& Request : {RadientAssetResolveInfo{Path.c_str()},
+                                RadientAssetResolveInfo{"asset.bin", Path.c_str()}})
+    {
+        RefCntAutoPtr<IRadientAssetLocation> Location;
+        ASSERT_EQ(Resolver->ResolveAssetLocation(Request, &Location), RADIENT_STATUS_OK);
+        EXPECT_STREQ(Location->GetLocation(), Data->GetResolvedURI());
+    }
+    RefCntAutoPtr<IRadientAssetLocation> RelativeBase;
+    ASSERT_EQ(Resolver->ResolveAssetLocation({"asset.bin", "other/model.gltf"}, &RelativeBase), RADIENT_STATUS_OK);
+    EXPECT_EQ(RelativeBase->GetLocation(), FileSystem::SimplifyPath("other/asset.bin"));
+    Resolver.Release();
+    EXPECT_EQ(Data->GetSize(), 4u);
+}
+
+TEST(RadientAssetResolverTest, CapturesRelativeBaseDirectoryAtCreation)
+{
+    TempDirectory TempDir{"RadientResolverDirectoryTest"};
+    const auto    Root = std::filesystem::absolute(TempDir.Get());
+    ASSERT_TRUE(std::filesystem::create_directory(Root / "assets"));
+    ASSERT_TRUE(std::filesystem::create_directory(Root / "other"));
+    const auto AssetPath = Root / "assets" / "asset.bin";
+    {
+        std::ofstream File{AssetPath, std::ios::binary};
+        ASSERT_TRUE(File.is_open());
+        File << "original";
+        ASSERT_TRUE(File.good());
+    }
+
+    // Restore before TempDir is destroyed, including when ASSERT_* returns early.
+    struct WorkingDirectoryGuard
+    {
+        const std::filesystem::path Original = std::filesystem::current_path();
+        ~WorkingDirectoryGuard()
+        {
+            std::error_code Error;
+            std::filesystem::current_path(Original, Error);
+            EXPECT_FALSE(Error) << Error.message();
+        }
+    } RestoreDirectory;
+
+    // Both working directories are inside the temporary tree. No relative path
+    // between the process's original drive and the temporary drive is needed.
+    std::filesystem::current_path(Root);
+    // current_path() may resolve directory aliases (e.g. /var -> /private/var
+    // on macOS). Use the same creation-time working directory as the resolver.
+    const auto                               ExpectedAssetPath = std::filesystem::current_path() / "assets" / "asset.bin";
+    RadientFilesystemAssetResolverCreateInfo CI;
+    CI.BaseDirectory = "assets";
+    RefCntAutoPtr<IRadientAssetResolver> Resolver;
+    ASSERT_EQ(CreateRadientFilesystemAssetResolver(CI, &Resolver), RADIENT_STATUS_OK);
+
+    // A resolver retaining just "assets" would now look in other/assets.
+    std::filesystem::current_path(Root / "other");
+    EXPECT_EQ(CheckAsset(Resolver, {"asset.bin"}), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientAssetData> Data;
+    ASSERT_EQ(OpenAsset(Resolver, {"asset.bin"}, &Data), RADIENT_STATUS_OK);
+    ASSERT_NE(Data, nullptr);
+    ASSERT_NE(Data->GetData(), nullptr);
+    EXPECT_EQ((std::string{static_cast<const char*>(Data->GetData()), Data->GetSize()}), "original");
+    EXPECT_EQ(Data->GetResolvedURI(), FileSystem::SimplifyPath(ExpectedAssetPath.string().c_str()));
+}
+
+TEST(RadientAssetResolverTest, PublicFactoryDefaultsAndRejectsNetworkBase)
+{
+    for (const char* Directory : {static_cast<const char*>(nullptr), ""})
+    {
+        RadientFilesystemAssetResolverCreateInfo CI;
+        CI.BaseDirectory = Directory;
+        RefCntAutoPtr<IRadientAssetResolver> Resolver;
+        ASSERT_EQ(CreateRadientFilesystemAssetResolver(CI, &Resolver), RADIENT_STATUS_OK);
+        RefCntAutoPtr<IRadientAssetLocation> Location;
+        ASSERT_EQ(Resolver->ResolveAssetLocation({"asset.bin"}, &Location), RADIENT_STATUS_OK);
+        EXPECT_STREQ(Location->GetLocation(), "asset.bin");
+    }
+    RadientFilesystemAssetResolverCreateInfo CI;
+    CI.BaseDirectory = "https://example.com/assets";
+    RefCntAutoPtr<IRadientAssetResolver> Resolver;
+    EXPECT_EQ(CreateRadientFilesystemAssetResolver(CI, &Resolver), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(Resolver, nullptr);
 }

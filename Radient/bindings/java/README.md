@@ -137,3 +137,11 @@ suite. Exhaustive marshalling and failure cleanup remain in the
 [shared fixture tests](../../../BuildTools/Bindings/tests/native/README.md).
 Linux CI runs both sets in the Clang/Debug job; its main build produces the Radient
 JNI library and classes before CTest executes the integration tests.
+
+The filesystem resolver can be created with `CreateRadientFilesystemAssetResolver`
+and supplied through `RadientEngineCreateInfo.Assets.pAssetResolver`. Its optional
+`BaseDirectory` supplies the base for relative top-level requests; dependencies
+resolve relative to their referring asset. The engine retains the resolver, so
+its application wrapper may be released after engine creation. Resolver I/O
+methods are native-only. Without an explicit resolver, filesystem loading uses
+the existing default. Browser paths refer to the virtual filesystem.

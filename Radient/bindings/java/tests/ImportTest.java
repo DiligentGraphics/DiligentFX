@@ -77,36 +77,47 @@ public final class ImportTest {
         });
 
         run("OBJ ImportScene marshals both outputs and resolves a relative material library", () -> {
-            try (AssetFixture f = new AssetFixture()) {
-                var importer = importer(f);
-                RadientSceneLoadInfo load = loadInfo("obj/triangle.obj");
-                load.ImporterId = "obj";
-                RadientSceneInstantiateInfo info = new RadientSceneInstantiateInfo();
-                info.Name = Fixtures.string("import.objInstanceName");
-                var result = importer.ImportScene(load, info);
-                var asset = f.asset(result.ppScene, result.returnValue);
-                long root = result.RootEntity;
-                check(root != InvalidRadientEntityID);
-                f.ready(asset);
-                ok(importer.ProcessPendingImports());
-                ok(importer.ProcessPendingImports());
-                var sceneDesc = asset.GetDesc();
-                if (sceneDesc.ppAnimationClips != null)
-                    for (var clip : sceneDesc.ppAnimationClips) f.keep(clip);
-                equal(0L, sceneDesc.AnimationClipCount);
-                long entity = f.sceneEntities(root).stream().filter(e -> f.hasComponent(e, RADIENT_COMPONENT_TYPE_MESH))
-                    .findFirst().orElseThrow(() -> new AssertionError("Missing OBJ mesh"));
-                var mesh = f.ready(f.mesh(entity));
-                var desc = f.meshDesc(mesh);
-                equal(3L, desc.pGeometries[0].VertexCount);
-                var material = desc.pPrimitives[0].pMaterial;
-                check(material != null);
-                var definition = f.keep(material.GetDefinition());
-                check(definition != null);
-                var handle = f.parameter(definition, RadientStandardMaterialDiffuseFactorName);
-                float[] value = AssetFixture.floats(f.parameterBytes(material, handle, 16));
-                check(Math.abs(value[1] - Fixtures.number("import.objGreen")) < 1e-6);
-            }
+            RadientFilesystemAssetResolverCreateInfo resolverInfo = new RadientFilesystemAssetResolverCreateInfo();
+            resolverInfo.BaseDirectory = Fixtures.assetPath("obj/triangle.obj").getParent().getParent().toString();
+            var created = CreateRadientFilesystemAssetResolver(resolverInfo);
+            ok(created.returnValue);
+            var resolver = created.ppResolver;
+            try {
+                RadientEngineCreateInfo engineInfo = new RadientEngineCreateInfo();
+                engineInfo.Assets.pAssetResolver = resolver;
+                try (AssetFixture f = new AssetFixture(engineInfo)) {
+                    resolver.close(); // Only the engine retains the resolver while the asset loads.
+                    var importer = importer(f);
+                    RadientSceneLoadInfo load = loadInfo("obj/triangle.obj");
+                    load.URI = "obj/triangle.obj";
+                    load.ImporterId = "obj";
+                    RadientSceneInstantiateInfo info = new RadientSceneInstantiateInfo();
+                    info.Name = Fixtures.string("import.objInstanceName");
+                    var result = importer.ImportScene(load, info);
+                    var asset = f.asset(result.ppScene, result.returnValue);
+                    long root = result.RootEntity;
+                    check(root != InvalidRadientEntityID);
+                    f.ready(asset);
+                    ok(importer.ProcessPendingImports());
+                    ok(importer.ProcessPendingImports());
+                    var sceneDesc = asset.GetDesc();
+                    if (sceneDesc.ppAnimationClips != null)
+                        for (var clip : sceneDesc.ppAnimationClips) f.keep(clip);
+                    equal(0L, sceneDesc.AnimationClipCount);
+                    long entity = f.sceneEntities(root).stream().filter(e -> f.hasComponent(e, RADIENT_COMPONENT_TYPE_MESH))
+                        .findFirst().orElseThrow(() -> new AssertionError("Missing OBJ mesh"));
+                    var mesh = f.ready(f.mesh(entity));
+                    var desc = f.meshDesc(mesh);
+                    equal(3L, desc.pGeometries[0].VertexCount);
+                    var material = desc.pPrimitives[0].pMaterial;
+                    check(material != null);
+                    var definition = f.keep(material.GetDefinition());
+                    check(definition != null);
+                    var handle = f.parameter(definition, RadientStandardMaterialDiffuseFactorName);
+                    float[] value = AssetFixture.floats(f.parameterBytes(material, handle, 16));
+                    check(Math.abs(value[1] - Fixtures.number("import.objGreen")) < 1e-6);
+                }
+            } finally { resolver.close(); }
         });
 
         run("unsupported importers return empty outputs without adding an entity", () -> {

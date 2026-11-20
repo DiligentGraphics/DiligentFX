@@ -14,13 +14,19 @@ import static diligent.radient.tests.TestSupport.*;
 // by a lifetime test or until fixture cleanup, including on assertion failures.
 final class AssetFixture implements AutoCloseable {
     private final Resources resources = new Resources();
-    private final SceneFixture sceneFixture = new SceneFixture();
-    final IRadientEngine engine = sceneFixture.engine;
-    final IRadientScene scene = sceneFixture.scene;
-    final IRadientSceneWriter writer = sceneFixture.writer;
+    private final SceneFixture sceneFixture;
+    final IRadientEngine engine;
+    final IRadientScene scene;
+    final IRadientSceneWriter writer;
     final IRadientAssetManager manager;
 
-    AssetFixture() {
+    AssetFixture() { this(new RadientEngineCreateInfo()); }
+
+    AssetFixture(RadientEngineCreateInfo info) {
+        sceneFixture = new SceneFixture("Scene", info);
+        engine = sceneFixture.engine;
+        scene = sceneFixture.scene;
+        writer = sceneFixture.writer;
         try {
             var result = engine.GetAssetManager();
             manager = value(result.ppAssetManager, result.returnValue);

@@ -31,6 +31,7 @@
 #include "RefCntAutoPtr.hpp"
 
 #include <cctype>
+#include <filesystem>
 #include <string>
 #include <utility>
 #include <vector>
@@ -115,9 +116,17 @@ private:
 
 } // namespace
 
-RadientFilesystemAssetResolver::RadientFilesystemAssetResolver(IReferenceCounters* pRefCounters) :
+RadientFilesystemAssetResolver::RadientFilesystemAssetResolver(IReferenceCounters* pRefCounters, const RadientFilesystemAssetResolverCreateInfo& CreateInfo) :
     TBase{pRefCounters}
 {
+    if (CreateInfo.BaseDirectory != nullptr && CreateInfo.BaseDirectory[0] != 0)
+    {
+        // Keep dependency identities absolute so an already resolved dependency
+        // is not prefixed with the base directory again on a subsequent request.
+        m_BaseDirectory = std::filesystem::absolute(CreateInfo.BaseDirectory).string();
+        if (!FileSystem::IsSlash(m_BaseDirectory.back()))
+            m_BaseDirectory += '/';
+    }
 }
 
 bool RadientFilesystemAssetResolver::HasURIScheme(const std::string& URI)
@@ -216,14 +225,17 @@ RADIENT_STATUS RadientFilesystemAssetResolver::ResolveAssetLocation(const Radien
     if (ResolveInfo.URI == nullptr || *ResolveInfo.URI == 0)
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
-    const std::string ResolvedURI = ResolveFilesystemURI(ResolveInfo.URI, ResolveInfo.BaseURI);
+    const char*       BaseURI     = ResolveInfo.BaseURI != nullptr && ResolveInfo.BaseURI[0] != 0 ?
+        ResolveInfo.BaseURI :
+        m_BaseDirectory.c_str();
+    const std::string ResolvedURI = ResolveFilesystemURI(ResolveInfo.URI, BaseURI);
     if (ResolvedURI.empty() || HasURIScheme(ResolvedURI))
         return RADIENT_STATUS_INVALID_ARGUMENT;
 
     RefCntAutoPtr<RadientFilesystemAssetLocation> pLocation{
         MakeNewRCObj<RadientFilesystemAssetLocation>()(
             ResolvedURI,
-            ResolveFilesystemPathForRead(ResolveInfo.URI, ResolveInfo.BaseURI))};
+            ResolveFilesystemPathForRead(ResolveInfo.URI, BaseURI))};
     pLocation->QueryInterface(IID_RadientAssetLocation, ppLocation);
     return *ppLocation != nullptr ? RADIENT_STATUS_OK : RADIENT_STATUS_FAILED;
 }

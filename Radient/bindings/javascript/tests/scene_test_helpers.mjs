@@ -1,6 +1,6 @@
 // Use one worker, matching the test module's preloaded pthread pool. These
 // fixtures exercise the production engine and scene without creating a GPU.
-export function createSceneFixture(t, api, assert, OK, name = "Scene") {
+export function createSceneFixture(t, api, assert, OK, name = "Scene", engineInfo = {}) {
     let engine;
     let scene;
     let writer;
@@ -14,7 +14,7 @@ export function createSceneFixture(t, api, assert, OK, name = "Scene") {
         assert.ok(result.value !== null);
         return result.value;
     }
-    engine = value(api.CreateRadientEngine({WorkerThreadCount: 1}));
+    engine = value(api.CreateRadientEngine({WorkerThreadCount: 1, ...engineInfo}));
     scene = value(engine.CreateScene({Desc: {Name: name}}));
     writer = value(engine.CreateSceneWriter(scene));
     return {engine, scene, writer, value};

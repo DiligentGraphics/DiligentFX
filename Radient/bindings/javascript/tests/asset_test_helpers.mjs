@@ -1,10 +1,10 @@
 import {readFixtures} from "./fixtures.mjs";
 import {createSceneFixture} from "./scene_test_helpers.mjs";
 
-export function createAssetFixture(t, api, assert, constants, testData) {
+export function createAssetFixture(t, api, assert, constants, testData, engineInfo = {}) {
     const data = readFixtures(testData);
     const {RADIENT_STATUS_OK: OK, RADIENT_STATUS_PENDING: PENDING} = constants.RADIENT_STATUS;
-    const fixture = createSceneFixture(t, api, assert, OK);
+    const fixture = createSceneFixture(t, api, assert, OK, "Scene", engineInfo);
     const owned = [];
     t.after(() => { for (const object of owned.reverse()) object?.dispose(); });
     const keep = object => { owned.push(object); return object; };

@@ -38,7 +38,6 @@
     "Diligent::RadientDataBlobCreateInfo::OnDestroy",
     "Diligent::RadientDataBlobCreateInfo::pUserData",
     "Diligent::RadientEngineCreateInfo::Backend",
-    "Diligent::RadientEngineCreateInfo::Assets",
     "Diligent::RadientEngineCreateInfo::pThreadPool",
     "Diligent::IThreadPool",
     "Diligent::IDeviceContext",
@@ -48,7 +47,6 @@
     "Diligent::RadientRenderTargetDesc::pSwapChain",
     "Diligent::RadientRenderTargetDesc::pColorRTV",
     "Diligent::RadientRenderTargetDesc::pDepthDSV",
-    "Diligent::RadientBackendCreateInfo",
-    "Diligent::RadientAssetManagerCreateInfo"
+    "Diligent::RadientBackendCreateInfo"
   ]
 }

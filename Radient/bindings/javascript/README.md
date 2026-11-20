@@ -476,3 +476,11 @@ Capture copies the back buffer before presentation and polls a fence while
 yielding to the browser. It never uses `WaitForIdle()` or a browser screenshot.
 The browser adapter's optional `enableCapture` setting enables copy-source usage
 on the canvas swap chain; it is false for ordinary applications.
+
+The filesystem resolver can be created with `CreateRadientFilesystemAssetResolver`
+and supplied through `RadientEngineCreateInfo.Assets.pAssetResolver`. Its optional
+`BaseDirectory` supplies the base for relative top-level requests; dependencies
+resolve relative to their referring asset. The engine retains the resolver, so
+its application wrapper may be released after engine creation. Resolver I/O
+methods are native-only. Without an explicit resolver, filesystem loading uses
+the existing default. Browser paths refer to the virtual filesystem.

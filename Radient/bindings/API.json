@@ -24,7 +24,13 @@
       "Diligent::RadientComputeMaterialDefinitionDesc",
       "Diligent::RadientCustomComponentData"
     ],
-    "include": ["Diligent::RADIENT_MAX_ACTIVE_MORPH_TARGET_COUNT"]
+    "include": [
+      "Diligent::RADIENT_MAX_ACTIVE_MORPH_TARGET_COUNT",
+      "Diligent::RadientFilesystemAssetResolverCreateInfo",
+      "Diligent::CreateRadientFilesystemAssetResolver",
+      "Diligent::IRadientAssetResolver",
+      "Diligent::IID_RadientAssetResolver"
+    ]
   },
   "declarations": {
     "Diligent::IObject": {"binding": "external", "reason": "The language runtime supplies reference counting and interface queries.", "ownership": "reference_counted"},
@@ -62,7 +68,9 @@
       }
     },
     "Diligent::RadientBackendCreateInfo": {"binding": "external", "reason": "Engine configuration uses native defaults until this subsystem is exposed."},
-    "Diligent::RadientAssetManagerCreateInfo": {"binding": "external", "reason": "Engine configuration uses native defaults until this subsystem is exposed."},
+    "Diligent::IRadientAssetResolver": {
+      "exclude_methods": ["ResolveAssetLocation", "CheckAsset", "OpenAsset"]
+    },
     "Diligent::IThreadPool": {"binding": "external", "reason": "Engine configuration uses native defaults until this subsystem is exposed."},
     "Diligent::RadientEngineCreateInfo": {
       "fields": {

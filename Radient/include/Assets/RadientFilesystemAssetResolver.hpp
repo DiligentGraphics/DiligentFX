@@ -41,7 +41,7 @@ class RadientFilesystemAssetResolver final : public ObjectBase<IRadientAssetReso
 public:
     using TBase = ObjectBase<IRadientAssetResolver>;
 
-    explicit RadientFilesystemAssetResolver(IReferenceCounters* pRefCounters);
+    explicit RadientFilesystemAssetResolver(IReferenceCounters* pRefCounters, const RadientFilesystemAssetResolverCreateInfo& CreateInfo = {});
 
     IMPLEMENT_QUERY_INTERFACE_IN_PLACE(IID_RadientAssetResolver, TBase)
 
@@ -65,6 +65,9 @@ public:
 
     virtual RADIENT_STATUS DILIGENT_CALL_TYPE OpenAsset(IRadientAssetLocation* pLocation,
                                                         IRadientAssetData**    ppData) override final;
+
+private:
+    std::string m_BaseDirectory;
 };
 
 } // namespace Diligent

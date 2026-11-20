@@ -92,9 +92,10 @@ final class TestSupport {
 
         SceneFixture() { this("Scene"); }
 
-        SceneFixture(String name) {
+        SceneFixture(String name) { this(name, new RadientEngineCreateInfo()); }
+
+        SceneFixture(String name, RadientEngineCreateInfo info) {
             try {
-                RadientEngineCreateInfo info = new RadientEngineCreateInfo();
                 info.WorkerThreadCount = 1;
                 var created = CreateRadientEngine(info);
                 engine = created.ppEngine;

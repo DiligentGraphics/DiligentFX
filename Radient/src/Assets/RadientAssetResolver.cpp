@@ -69,6 +69,26 @@ RADIENT_STATUS OpenAsset(IRadientAssetResolver*         pResolver,
         RADIENT_STATUS_FAILED;
 }
 
+RADIENT_STATUS CreateRadientFilesystemAssetResolver(const RadientFilesystemAssetResolverCreateInfo& CreateInfo,
+                                                    IRadientAssetResolver**                         ppResolver)
+{
+    if (ppResolver == nullptr)
+        return RADIENT_STATUS_INVALID_ARGUMENT;
+    *ppResolver = nullptr;
+    try
+    {
+        if (CreateInfo.BaseDirectory != nullptr && RadientFilesystemAssetResolver::HasURIScheme(CreateInfo.BaseDirectory))
+            return RADIENT_STATUS_INVALID_ARGUMENT;
+        RefCntAutoPtr<IRadientAssetResolver> pResolver{MakeNewRCObj<RadientFilesystemAssetResolver>()(CreateInfo)};
+        *ppResolver = pResolver.Detach();
+        return RADIENT_STATUS_OK;
+    }
+    catch (...)
+    {
+        return RADIENT_STATUS_FAILED;
+    }
+}
+
 // Creates the built-in resolver for filesystem paths and file:// URIs.
 RefCntAutoPtr<IRadientAssetResolver> CreateDefaultRadientAssetResolver()
 {
@@ -89,6 +109,13 @@ RefCntAutoPtr<IRadientAssetResolver> GetRadientAssetResolverOrDefault(IRadientAs
 
 extern "C"
 {
+
+    Diligent::RADIENT_STATUS Diligent_CreateRadientFilesystemAssetResolver(
+        const Diligent::RadientFilesystemAssetResolverCreateInfo& CreateInfo,
+        Diligent::IRadientAssetResolver**                         ppResolver)
+    {
+        return Diligent::CreateRadientFilesystemAssetResolver(CreateInfo, ppResolver);
+    }
 
     Diligent::RADIENT_STATUS Diligent_CheckAsset(
         Diligent::IRadientAssetResolver*         pResolver,

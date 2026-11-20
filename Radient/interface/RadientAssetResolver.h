@@ -52,6 +52,19 @@ struct RadientAssetResolveInfo
 };
 typedef struct RadientAssetResolveInfo RadientAssetResolveInfo;
 
+/// Configuration of the built-in filesystem resolver.
+struct RadientFilesystemAssetResolverCreateInfo
+{
+    /// Optional base directory for relative requests without BaseURI.
+    /// Null or empty preserves the default filesystem working-directory behavior.
+    /// A supplied directory is copied and made absolute at creation time.
+    /// Absolute requests and requests with BaseURI are unaffected. This is not
+    /// an access restriction; paths may refer outside this directory.
+    /// On the Web, paths refer to the virtual filesystem.
+    const Char* BaseDirectory DEFAULT_INITIALIZER(nullptr);
+};
+typedef struct RadientFilesystemAssetResolverCreateInfo RadientFilesystemAssetResolverCreateInfo;
+
 // {61A897A7-0EF4-4F5F-B769-406DA98B3B5A}
 static DILIGENT_CONSTEXPR INTERFACE_ID IID_RadientAssetLocation =
     {0x61a897a7, 0xef4, 0x4f5f, {0xb7, 0x69, 0x40, 0x6d, 0xa9, 0x8b, 0x3b, 0x5a}};
@@ -181,6 +194,11 @@ DILIGENT_END_INTERFACE
 // clang-format on
 
 #include "../../../DiligentCore/Primitives/interface/DefineGlobalFuncHelperMacros.h"
+
+/// Creates a filesystem resolver. The engine retains a supplied resolver.
+RADIENT_STATUS DILIGENT_GLOBAL_FUNCTION(CreateRadientFilesystemAssetResolver)(
+    const RadientFilesystemAssetResolverCreateInfo REF CreateInfo,
+    IRadientAssetResolver**                            ppResolver);
 
 /// Resolves ResolveInfo and checks whether the resulting asset location can be opened.
 RADIENT_STATUS DILIGENT_GLOBAL_FUNCTION(CheckAsset)(IRadientAssetResolver*            pResolver,
