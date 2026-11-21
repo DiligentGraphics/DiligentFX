@@ -103,23 +103,22 @@ public:
         const char*        ResolvedSourceURI = pSceneData->GetResolvedURI();
 
         GLTF::DocumentLoadInfo DocLoadInfo;
-        DocLoadInfo.FileName           = ResolvedSourceURI;
-        DocLoadInfo.DecodeImages       = false;
-        DocLoadInfo.FileExistsCallback = [pAssetResolver = RefCntAutoPtr<IRadientAssetResolver>{Context.pAssetResolver},
-                                          pSceneData     = RefCntAutoPtr<IRadientAssetData>{pSceneData},
-                                          ResolvedSourceURI](const char* FilePath) {
-            if (FilePath != nullptr && std::strcmp(FilePath, pSceneData->GetResolvedURI()) == 0)
-                return true;
-
-            return CheckAsset(pAssetResolver, {FilePath, ResolvedSourceURI}) == RADIENT_STATUS_OK;
+        DocLoadInfo.FileName             = ResolvedSourceURI;
+        DocLoadInfo.DecodeImages         = false;
+        DocLoadInfo.ResolveExternalPaths = false;
+        DocLoadInfo.FileExistsCallback   = [pAssetResolver = RefCntAutoPtr<IRadientAssetResolver>{Context.pAssetResolver},
+                                            ResolvedSourceURI](const char* URI) {
+            return CheckAsset(pAssetResolver, {URI, ResolvedSourceURI}) == RADIENT_STATUS_OK;
         };
         DocLoadInfo.ReadWholeFileCallback = [pAssetResolver = RefCntAutoPtr<IRadientAssetResolver>{Context.pAssetResolver},
                                              pSceneData     = RefCntAutoPtr<IRadientAssetData>{pSceneData},
-                                             ResolvedSourceURI](const char* FilePath, std::vector<unsigned char>& Data, std::string& Error) {
+                                             ResolvedSourceURI](const char* FilePath, std::vector<unsigned char>& Data, std::string& Error) mutable {
             RefCntAutoPtr<IRadientAssetData> pData;
-            if (FilePath != nullptr && std::strcmp(FilePath, pSceneData->GetResolvedURI()) == 0)
+            if (pSceneData != nullptr && FilePath != nullptr && std::strcmp(FilePath, pSceneData->GetResolvedURI()) == 0)
             {
-                pData = pSceneData;
+                // Reuse the supplied root only for the initial document read.
+                // A dependency with the same spelling still belongs to the resolver.
+                pData = std::move(pSceneData);
             }
             else
             {

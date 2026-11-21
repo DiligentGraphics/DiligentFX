@@ -129,12 +129,15 @@ public:
 
     RadientAssetImpl(IReferenceCounters*          pRefCounters,
                      std::string&&                AssetURI,
-                     RefCntAutoPtr<PayloadType>&& pPayload = {}) :
+                     RefCntAutoPtr<PayloadType>&& pPayload = {},
+                     std::string                  BaseURI  = {}) :
         TBase{pRefCounters},
-        m_URI{std::move(AssetURI)}
+        m_URI{std::move(AssetURI)},
+        m_BaseURI{std::move(BaseURI)}
     {
         m_Ref.URI     = m_URI.c_str();
         m_Ref.Version = 1;
+        m_Ref.BaseURI = m_BaseURI.empty() ? nullptr : m_BaseURI.c_str();
 
         if (pPayload)
             SetPayload(std::move(pPayload));
@@ -145,6 +148,12 @@ public:
     {
         return RefCntAutoPtr<Implementation>{
             MakeNewRCObj<Implementation>()(std::move(AssetURI), std::move(pPayload))};
+    }
+
+    static RefCntAutoPtr<Implementation> Create(std::string AssetURI, std::string BaseURI)
+    {
+        return RefCntAutoPtr<Implementation>{
+            MakeNewRCObj<Implementation>()(std::move(AssetURI), RefCntAutoPtr<PayloadType>{}, std::move(BaseURI))};
     }
 
     virtual const RadientAssetReference& DILIGENT_CALL_TYPE GetReference() const override final
@@ -257,6 +266,7 @@ public:
 
 private:
     std::string           m_URI;
+    std::string           m_BaseURI;
     RadientAssetReference m_Ref;
 
     RefCntAutoPtr<PayloadType>  m_pPayload;

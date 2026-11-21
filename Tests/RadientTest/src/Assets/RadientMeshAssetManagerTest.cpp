@@ -51,6 +51,50 @@ using namespace Diligent;
 namespace
 {
 
+
+// A client wrapper supplies its own reference while retaining a real material.
+// Forward private-interface queries as well so normal material loading applies.
+class ContextualMaterial final : public ObjectBase<IRadientMaterialAsset>
+{
+public:
+    using TBase = ObjectBase<IRadientMaterialAsset>;
+    ContextualMaterial(IReferenceCounters* Counters, IRadientMaterialAsset* Material, const char* BaseURI) :
+        TBase{Counters}, m_Material{Material}, m_BaseURI{BaseURI != nullptr ? BaseURI : ""}
+    {
+        m_Reference = {"material%20name", 1, BaseURI != nullptr ? m_BaseURI.c_str() : nullptr};
+    }
+    void DILIGENT_CALL_TYPE QueryInterface(const INTERFACE_ID& IID, IObject** Object) override
+    {
+        if (Object == nullptr)
+            return;
+        if (IID == IID_Unknown || IID == IID_RadientAsset || IID == IID_RadientMaterialAsset)
+        {
+            *Object = this;
+            AddRef();
+        }
+        else
+            m_Material->QueryInterface(IID, Object);
+    }
+    const RadientAssetReference& DILIGENT_CALL_TYPE     GetReference() const override { return m_Reference; }
+    RADIENT_ASSET_TYPE DILIGENT_CALL_TYPE               GetType() const override { return RADIENT_ASSET_TYPE_MATERIAL; }
+    IRadientMaterialDefinitionAsset* DILIGENT_CALL_TYPE GetDefinition() const override { return m_Material->GetDefinition(); }
+    Uint64 DILIGENT_CALL_TYPE                           GetVersion() const override { return m_Material->GetVersion(); }
+    RADIENT_STATUS DILIGENT_CALL_TYPE                   GetParameter(const RadientMaterialParameterHandle& Handle, void* Data, Uint32 Size) const override
+    {
+        return m_Material->GetParameter(Handle, Data, Size);
+    }
+    RADIENT_STATUS DILIGENT_CALL_TYPE GetTexture(const RadientMaterialParameterHandle& Handle, Uint32 Index, IRadientTextureAsset** Texture) const override
+    {
+        return m_Material->GetTexture(Handle, Index, Texture);
+    }
+    RADIENT_STATUS DILIGENT_CALL_TYPE CreateWriter(IRadientMaterialWriter** Writer) override { return m_Material->CreateWriter(Writer); }
+
+private:
+    RefCntAutoPtr<IRadientMaterialAsset> m_Material;
+    std::string                          m_BaseURI;
+    RadientAssetReference                m_Reference;
+};
+
 bool IsAcceptedOrMissingGPU(RADIENT_STATUS Status)
 {
     // This unit test does not provide GPU managers. Mesh source loading should
@@ -1409,4 +1453,43 @@ TEST(RadientMeshAssetManagerTest, CreatesNonIndexedMeshWithoutIndexData)
     EXPECT_FALSE(Result.pMesh->Primitives[0].IsIndexed);
     EXPECT_EQ(Result.pMesh->Primitives[0].FirstElement, 1u);
     EXPECT_EQ(Result.pMesh->Primitives[0].ElementCount, 2u);
+}
+
+
+TEST(RadientMeshAssetManagerTest, MeshViewCacheIncludesMaterialReferenceContext)
+{
+    auto                Pool            = CreateThreadPool(ThreadPoolCreateInfo{0});
+    auto                MeshManager     = RadientMeshAssetManager::Create({});
+    auto                MaterialManager = RadientMaterialAssetManager::Create();
+    auto                Material        = CreateDefaultMaterial(*MaterialManager);
+    MeshGeometryHandles Geometry;
+    const auto          GeometryStatus = CreateMeshGeometryData(*MeshManager, *Pool, MakeMeshSources(), Geometry);
+    DrainThreadPool(*Pool);
+    ASSERT_TRUE(IsAcceptedOrMissingGPU(GeometryStatus));
+    const RadientMeshGeometryData    GeometryData = MakeGeometryData(Geometry);
+    const std::array<const char*, 6> Bases{"scene:first", "scene:second", "scene:first", "scene:first", nullptr, ""};
+    // Equal complete references reuse the first payload; different context must
+    // retain the requested material. Null and empty bases are equivalent.
+    const std::array<size_t, 6>                         FirstMatch{0, 1, 0, 0, 4, 4};
+    std::array<RefCntAutoPtr<IRadientMaterialAsset>, 6> Materials;
+    std::array<RefCntAutoPtr<IRadientMeshAsset>, 6>     Meshes;
+    for (size_t Index = 0; Index < Meshes.size(); ++Index)
+    {
+        SCOPED_TRACE(Index);
+        Materials[Index] = RefCntAutoPtr<IRadientMaterialAsset>{MakeNewRCObj<ContextualMaterial>()(Material, Bases[Index])};
+        RadientMeshPrimitiveCreateInfo Primitive{};
+        const auto                     View = MakeMeshView(Primitive);
+        Primitive.pMaterial                 = Materials[Index];
+        const auto Status                   = MeshManager->CreateMeshView(*Pool, &GeometryData, 1, View, &Meshes[Index]);
+        DrainThreadPool(*Pool);
+        ASSERT_TRUE(IsAcceptedOrMissingGPU(Status));
+        ASSERT_NE(Meshes[Index], nullptr);
+        ASSERT_EQ(RadientMeshAssetManager::GetLoadStatus(Meshes[Index]), RADIENT_STATUS_OK);
+        ASSERT_EQ(Meshes[Index]->GetDesc().PrimitiveCount, 1u);
+        EXPECT_EQ(Meshes[Index]->GetDesc().pPrimitives[0].pMaterial, Materials[FirstMatch[Index]].RawPtr());
+        for (size_t Other = 0; Other < Index; ++Other)
+            EXPECT_EQ(RadientMeshAssetManager::GetMeshPayload(Meshes[Index]) == RadientMeshAssetManager::GetMeshPayload(Meshes[Other]),
+                      Materials[Index]->GetReference() == Materials[Other]->GetReference());
+    }
+    Pool->StopThreads();
 }

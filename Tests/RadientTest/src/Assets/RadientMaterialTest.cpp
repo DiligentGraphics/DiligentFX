@@ -135,6 +135,7 @@ TEST(RadientMaterialTest, DefinitionCopiesSchemaAndDefaults)
     char          DefinitionName[] = "Copied definition";
     char          ParameterName[]  = "BaseColor";
     char          ReferenceURI[]   = "material-definition://copied";
+    char          ReferenceBase[]  = "opaque:source/document";
     RadientFloat4 DefaultColor{0.1f, 0.2f, 0.3f, 0.4f};
 
     RadientMaterialParameterDesc Parameter{};
@@ -144,7 +145,7 @@ TEST(RadientMaterialTest, DefinitionCopiesSchemaAndDefaults)
 
     RadientComputeMaterialDefinitionDesc DefinitionDesc{};
     DefinitionDesc.Name           = DefinitionName;
-    DefinitionDesc.Reference      = {ReferenceURI, 11};
+    DefinitionDesc.Reference      = {ReferenceURI, 11, ReferenceBase};
     DefinitionDesc.pParameters    = &Parameter;
     DefinitionDesc.ParameterCount = 1;
 
@@ -155,6 +156,7 @@ TEST(RadientMaterialTest, DefinitionCopiesSchemaAndDefaults)
     DefinitionName[0] = 'X';
     ParameterName[0]  = 'X';
     ReferenceURI[0]   = 'X';
+    ReferenceBase[0]  = 'X';
     DefaultColor      = {};
 
     const RadientMaterialDefinitionDesc& StoredDesc = pDefinition->GetDesc();
@@ -162,6 +164,7 @@ TEST(RadientMaterialTest, DefinitionCopiesSchemaAndDefaults)
     EXPECT_EQ(StoredDesc.Type, RADIENT_MATERIAL_DEFINITION_TYPE_COMPUTE);
     EXPECT_STREQ(StoredDesc.Reference.URI, "material-definition://copied");
     EXPECT_EQ(StoredDesc.Reference.Version, 11u);
+    EXPECT_STREQ(StoredDesc.Reference.BaseURI, "opaque:source/document");
     ASSERT_EQ(StoredDesc.ParameterCount, 1u);
     ASSERT_NE(StoredDesc.pParameters, nullptr);
     EXPECT_STREQ(pDefinition->GetReference().URI, "material-definition://copied");

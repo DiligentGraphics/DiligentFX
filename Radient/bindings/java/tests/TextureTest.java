@@ -84,6 +84,25 @@ public final class TextureTest {
             }
         });
 
+        run("texture references preserve their base in independent snapshots", () -> {
+            try (AssetFixture f = new AssetFixture()) {
+                RadientTextureLoadInfo info = new RadientTextureLoadInfo();
+                info.URI = "image%2Etga";
+                info.BaseURI = "opaque:document/model.gltf";
+                info.pDataBlob = f.blob(Fixtures.assetBytes("colors.tga"));
+                var created = f.manager.LoadTexture(info);
+                var texture = f.asset(created.ppTexture, created.returnValue);
+                var before = texture.GetReference();
+                f.ready(texture);
+                var after = texture.GetReference();
+                texture.close();
+                equal("image%2Etga", after.URI);
+                equal("opaque:document/model.gltf", after.BaseURI);
+                equal(before.URI, after.URI);
+                equal(before.BaseURI, after.BaseURI);
+            }
+        });
+
         run("texture inputs preserve validation failures and reject an active blob writer", () -> {
             try (AssetFixture f = new AssetFixture()) {
                 RadientTextureLoadInfo info = new RadientTextureLoadInfo();

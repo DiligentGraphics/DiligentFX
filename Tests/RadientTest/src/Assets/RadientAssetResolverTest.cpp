@@ -271,3 +271,57 @@ TEST(RadientAssetResolverTest, PublicFactoryDefaultsAndRejectsNetworkBase)
     EXPECT_EQ(CreateRadientFilesystemAssetResolver(CI, &Resolver), RADIENT_STATUS_INVALID_ARGUMENT);
     EXPECT_EQ(Resolver, nullptr);
 }
+
+TEST(RadientAssetResolverTest, PreservesLiteralDependencyPaths)
+{
+    TempDirectory     TempDir{"RadientEncodedReferenceTest"};
+    const std::string Directory = TempDir.Get() + "/literal%20base";
+    ASSERT_TRUE(std::filesystem::create_directory(Directory));
+    const std::string Base = Directory + "/document.gltf";
+    const std::string Path = Directory + "/image +%20.png";
+    {
+        std::ofstream File{Path, std::ios::binary};
+        ASSERT_TRUE(File.is_open());
+        File << "image";
+    }
+    auto Resolver = CreateDefaultRadientAssetResolver();
+    EXPECT_EQ(CheckAsset(Resolver, {"image +%20.png", Base.c_str()}), RADIENT_STATUS_OK);
+    EXPECT_EQ(CheckAsset(Resolver, {Path.c_str()}), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientAssetLocation> Location;
+    EXPECT_EQ(Resolver->ResolveAssetLocation({"invalid%00name", Base.c_str()}, &Location), RADIENT_STATUS_OK);
+    EXPECT_NE(Location, nullptr);
+}
+
+
+TEST(RadientAssetResolverTest, PreservesPercentEscapesInDependencyPaths)
+{
+    TempDirectory     TempDir{"RadientURIPathTest"};
+    const std::string Base     = TempDir.Get() + "/document.gltf";
+    auto              Resolver = CreateDefaultRadientAssetResolver();
+    // Windows does not permit ':' in filenames, but resolution remains testable.
+    // Linux and Web also verify that the decoded file can actually be opened.
+    for (const auto& Pair : {std::make_pair("image%3Ared.png", "image%3Ared.png"),
+                             std::make_pair("image%23red.png#part", "image%23red.png#part"),
+                             std::make_pair("image%2520red.png", "image%2520red.png")})
+    {
+        SCOPED_TRACE(Pair.first);
+        const std::string                    Path = TempDir.Get() + "/" + Pair.second;
+        RefCntAutoPtr<IRadientAssetLocation> Location;
+        ASSERT_EQ(Resolver->ResolveAssetLocation({Pair.first, Base.c_str()}, &Location), RADIENT_STATUS_OK);
+        EXPECT_EQ(Location->GetLocation(), FileSystem::SimplifyPath(Path.c_str()));
+#if PLATFORM_WIN32 || PLATFORM_UNIVERSAL_WINDOWS
+        if (std::strchr(Pair.second, ':') != nullptr)
+            continue;
+#endif
+        {
+            std::ofstream File{Path, std::ios::binary};
+            ASSERT_TRUE(File.is_open());
+            File << "data";
+        }
+        RefCntAutoPtr<IRadientAssetData> Data;
+        ASSERT_EQ(Resolver->OpenAsset(Location, &Data), RADIENT_STATUS_OK);
+        EXPECT_EQ(Data->GetSize(), 4u);
+    }
+    RefCntAutoPtr<IRadientAssetLocation> Location;
+    EXPECT_EQ(Resolver->ResolveAssetLocation({"https://example.com/image.png", Base.c_str()}, &Location), RADIENT_STATUS_INVALID_ARGUMENT);
+}

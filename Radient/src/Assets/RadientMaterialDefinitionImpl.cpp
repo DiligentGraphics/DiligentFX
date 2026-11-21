@@ -583,6 +583,7 @@ RadientMaterialDefinitionImpl::PackedData RadientMaterialDefinitionImpl::PackDat
     // Match the write order below: strings can add padding before aligned initialization data.
     Allocator.AddSpaceForString(DefinitionName);
     Allocator.AddSpaceForString(Desc.Reference.URI);
+    Allocator.AddSpaceForString(Desc.Reference.BaseURI);
     for (Uint32 InitializationIndex = 0; InitializationIndex < ShaderDataLayout.InitializationCount; ++InitializationIndex)
         Allocator.AddSpace(ShaderDataLayout.pInitializations[InitializationIndex].Size, alignof(Uint32));
 
@@ -647,6 +648,7 @@ RadientMaterialDefinitionImpl::PackedData RadientMaterialDefinitionImpl::PackDat
     pPackedDesc->Name                    = Writer.CopyString(DefinitionName);
     pPackedDesc->Reference               = Desc.Reference;
     pPackedDesc->Reference.URI           = Writer.CopyString(Desc.Reference.URI);
+    pPackedDesc->Reference.BaseURI       = Writer.CopyString(Desc.Reference.BaseURI);
     pPackedDesc->pParameters             = pParameters;
     Data.PackingPlan.Size                = ShaderDataLayout.Size;
     Data.PackingPlan.InitializationCount = ShaderDataLayout.InitializationCount;

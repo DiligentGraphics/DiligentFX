@@ -101,7 +101,9 @@ class PublicAPITest(unittest.TestCase):
                 "Diligent::RadientAssetReference": {
                     "fields": {
                         "URI": {"direction": "in", "nullable": True,
-                                "ownership": "borrowed", "lifetime": "call"}
+                                "ownership": "borrowed", "lifetime": "call"},
+                        "BaseURI": {"direction": "in", "nullable": True,
+                                    "ownership": "borrowed", "lifetime": "call"}
                     }
                 },
             },
@@ -114,8 +116,8 @@ class PublicAPITest(unittest.TestCase):
         self.assertEqual(matrix["fields"][0]["type"]["count"], 16)
         self.assertEqual(matrix["fields"][0]["default"].split().count("1.f"), 4)
         self.assertEqual(reference["methods"], [])
-        self.assertEqual([field["name"] for field in reference["fields"]], ["URI", "Version"])
-        self.assertEqual([field["default"] for field in reference["fields"]], ["nullptr", "0"])
+        self.assertEqual([field["name"] for field in reference["fields"]], ["URI", "Version", "BaseURI"])
+        self.assertEqual([field["default"] for field in reference["fields"]], ["nullptr", "0", "nullptr"])
 
     def test_public_constants(self):
         types = extract_public(["RadientAnimation.h", "RadientDataBlob.h", "RadientVertexLayout.h"], [

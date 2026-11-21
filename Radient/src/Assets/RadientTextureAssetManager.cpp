@@ -713,7 +713,7 @@ RADIENT_STATUS RadientTextureAssetManager::LoadTexture(IThreadPool&             
         AssetURI = MakeRadientAssetURI("texture");
 
     // AssetURI identifies this light asset handle. Payload caching uses the resolver-derived key below.
-    RefCntAutoPtr<TextureAssetImpl> pTextureAsset = TextureAssetImpl::Create(std::move(AssetURI));
+    RefCntAutoPtr<TextureAssetImpl> pTextureAsset = TextureAssetImpl::Create(std::move(AssetURI), TextureSource.GetBaseURI());
     VERIFY_EXPR(pTextureAsset != nullptr);
     if (!pTextureAsset)
         return RADIENT_STATUS_FAILED;

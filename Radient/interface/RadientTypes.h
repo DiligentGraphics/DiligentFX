@@ -136,10 +136,15 @@ struct RadientAssetReference
     /// Optional asset version supplied by the source.
     Uint64 Version DEFAULT_INITIALIZER(0);
 
+    /// Optional resolved URI of the referring asset. Together with URI, preserves
+    /// the resolution context of an imported dependency. Null and empty mean no base.
+    const Char* BaseURI DEFAULT_INITIALIZER(nullptr);
+
 #if DILIGENT_CPP_INTERFACE
     bool operator==(const RadientAssetReference& Rhs) const
     {
         return Version == Rhs.Version &&
+            std::strcmp(BaseURI != nullptr ? BaseURI : "", Rhs.BaseURI != nullptr ? Rhs.BaseURI : "") == 0 &&
             (URI == Rhs.URI ||
              (URI != nullptr && Rhs.URI != nullptr && std::strcmp(URI, Rhs.URI) == 0));
     }

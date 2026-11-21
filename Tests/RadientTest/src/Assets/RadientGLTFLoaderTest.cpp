@@ -25,10 +25,12 @@
  */
 
 #include "TempDirectory.hpp"
+#include "FileSystem.hpp"
 #include "TestingEnvironment.hpp"
 #include "gtest/gtest.h"
 
 #include "Assets/RadientAssetManagerImpl.hpp"
+#include "Assets/RadientAssetResolver.hpp"
 #include "Assets/RadientGLTFLoader.hpp"
 #include "Assets/RadientMaterialAssetManager.hpp"
 #include "Assets/RadientMeshAssetManager.hpp"
@@ -49,7 +51,9 @@
 #define TINYGLTF_NO_STB_IMAGE_WRITE
 #include "../../../../../DiligentTools/ThirdParty/tinygltf/tiny_gltf.h"
 
+#include <algorithm>
 #include <array>
+#include <map>
 #include <atomic>
 #include <chrono>
 #include <cstring>
@@ -1196,8 +1200,46 @@ RADIENT_STATUS LoadScene(RadientAssetManagerImpl&                AssetManager,
 }
 
 
-// Retained immutable sources avoid races in the ordinary test resolver's counters.
-// Only OpenAsset is gated; URI resolution and returned data remain independent.
+// Deliberately opaque identities: no basename fallback or path normalization.
+// Tests use a zero-worker pool, so all calls execute on the test thread.
+class DependencyURIResolver final : public ObjectBase<IRadientAssetResolver>
+{
+public:
+    using TBase = ObjectBase<IRadientAssetResolver>;
+    explicit DependencyURIResolver(IReferenceCounters* Counters) :
+        TBase{Counters},
+        Storage{MakeNewRCObj<TestRadientAssetResolver>()()}
+    {}
+    IMPLEMENT_QUERY_INTERFACE_IN_PLACE(IID_RadientAssetResolver, TBase)
+
+    void Add(const std::string& URI, const std::string& Base, const std::string& Resolved, std::vector<Uint8> Data)
+    {
+        Bases.emplace(URI, Base);
+        Storage->AddAsset(URI, Resolved, std::move(Data));
+    }
+    RADIENT_STATUS DILIGENT_CALL_TYPE ResolveAssetLocation(const RadientAssetResolveInfo& Info, IRadientAssetLocation** Location) override
+    {
+        const std::string URI  = Info.URI != nullptr ? Info.URI : "";
+        const std::string Base = Info.BaseURI != nullptr ? Info.BaseURI : "";
+        Requests.emplace_back(URI, Base);
+        auto It = Bases.find(URI);
+        if (It == Bases.end() || It->second != Base)
+        {
+            ADD_FAILURE() << "Unexpected dependency pair: " << URI << " relative to " << Base;
+            *Location = nullptr;
+            return RADIENT_STATUS_NOT_FOUND;
+        }
+        return Storage->ResolveAssetLocation(Info, Location);
+    }
+    RADIENT_STATUS DILIGENT_CALL_TYPE                CheckAsset(IRadientAssetLocation* Location) override { return Storage->CheckAsset(Location); }
+    RADIENT_STATUS DILIGENT_CALL_TYPE                OpenAsset(IRadientAssetLocation* Location, IRadientAssetData** Data) override { return Storage->OpenAsset(Location, Data); }
+    std::vector<std::pair<std::string, std::string>> Requests;
+
+private:
+    std::map<std::string, std::string>      Bases;
+    RefCntAutoPtr<TestRadientAssetResolver> Storage;
+};
+
 class ConcurrentTextureAssetResolver final : public ObjectBase<IRadientAssetResolver>
 {
 public:
@@ -1362,6 +1404,87 @@ TEST(RadientGLTFLoaderTest, ImporterUsesSuppliedRootAndPublicAssetServices)
     pThreadPool->StopThreads();
 }
 
+TEST(RadientGLTFLoaderTest, DecodesDependencyPathsAndPreservesResolvedDocumentBase)
+{
+    TempDirectory                             Directory{"RadientGLTFColonReferences"};
+    const std::string                         OpaqueSourceURI = "store:opaque-document?directory=not/a/path#scene.gltf";
+    const std::pair<const char*, const char*> References[]    = {
+        {"../mesh%20+%2520data.bin", "../mesh +%20data.bin"},
+        {"https://cdn.example.com/data/mesh.bin?version=2#part", "https://cdn.example.com/data/mesh.bin?version=2#part"},
+        {"/shared/mesh.bin", "/shared/mesh.bin"},
+        {"//cdn.example.com/shared/mesh.bin", "//cdn.example.com/shared/mesh.bin"},
+        {"package:mesh%2Fdata", "package:mesh/data"},
+        {"./unchanged/../mesh.bin", "./unchanged/../mesh.bin"},
+        {"image%3Ared.png", "./image:red.png"},
+        {"folder%3Ared/image.png", "./folder:red/image.png"},
+        {"C%3Adata.bin", "./C:data.bin"},
+        {OpaqueSourceURI.c_str(), OpaqueSourceURI.c_str()}};
+    for (const auto& Pair : References)
+    {
+        const char*       Reference = Pair.first;
+        const bool        ColonFile = std::strstr(Reference, "%3A") != nullptr;
+        const std::string SourceURI = ColonFile ? Directory.Get() + "/document.gltf" : OpaqueSourceURI;
+        SCOPED_TRACE(Reference);
+        const std::string ImageURI         = std::string{Reference} + ".png";
+        const std::string DecodedReference = Pair.second;
+        const std::string DecodedImage     = DecodedReference + ".png";
+        const std::string Source =
+            std::string{R"({"asset":{"version":"2.0"},"scene":0,"scenes":[{"nodes":[0]}],
+            "nodes":[{"mesh":0}],"buffers":[{"uri":")"} +
+            Reference + R"(","byteLength":36}],
+            "bufferViews":[{"buffer":0,"byteLength":36}],
+            "accessors":[{"bufferView":0,"componentType":5126,"count":3,"type":"VEC3","min":[0,0,0],"max":[1,1,0]}],
+            "meshes":[{"primitives":[{"attributes":{"POSITION":0}}]}],
+            "images":[{"uri":")" +
+            ImageURI + R"("}],"textures":[{"source":0}]})";
+        std::vector<Uint8> Buffer;
+        AppendBytes(Buffer, TrianglePositions);
+        RefCntAutoPtr<DependencyURIResolver> Resolver{MakeNewRCObj<DependencyURIResolver>()()};
+        Resolver->Add("input.gltf", "", SourceURI, {Source.begin(), Source.end()});
+        Resolver->Add(DecodedReference, SourceURI, "resolved:buffer", std::move(Buffer));
+        Resolver->Add(DecodedImage, SourceURI, "resolved:image", {TransparentPng.begin(), TransparentPng.end()});
+        RefCntAutoPtr<IRadientAssetData> Root;
+        ASSERT_EQ(OpenAsset(Resolver, {"input.gltf"}, &Root), RADIENT_STATUS_OK);
+        auto                                 Pool     = CreateThreadPool(ThreadPoolCreateInfo{0});
+        auto                                 Manager  = CreateLoaderAssetManager(Pool, Resolver);
+        auto                                 Services = Manager->CreateMeshImportServices();
+        RefCntAutoPtr<IRadientMaterialAsset> Material;
+        ASSERT_EQ(CreateStandardMaterialAsset(*Manager, {}, &Material), RADIENT_STATUS_OK);
+        RadientSceneAssetImportContext Context;
+        Context.pSourceData         = Root;
+        Context.pAssetResolver      = Resolver;
+        Context.pAssetManager       = Manager;
+        Context.pMeshImportServices = Services;
+        Context.pDefaultMaterial    = Material;
+        RadientImport::ImportedDocument Scene;
+        ASSERT_EQ(CreateRadientGLTFSceneAssetImporter()->Import(Context, Scene), RADIENT_STATUS_OK);
+        ASSERT_EQ(Scene.Meshes.size(), 1u);
+        ASSERT_EQ(Scene.Textures.size(), 1u);
+        ProcessQueuedTasks(*Pool);
+        EXPECT_EQ(RadientMeshAssetManager::GetLoadStatus(Scene.Meshes[0]), RADIENT_STATUS_OK);
+        EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(Scene.Textures[0]), RADIENT_STATUS_OK);
+        EXPECT_EQ(Scene.Meshes[0]->GetDesc().pGeometries[0].VertexCount, 3u);
+        EXPECT_EQ(Scene.Textures[0]->GetDesc().Width, 1u);
+        if (ColonFile)
+        {
+            // The importer preserves an explicit relative path. Check the actual
+            // filesystem resolver on every platform, including Windows where the
+            // colon-containing file cannot be created (it could name an ADS).
+            auto Filesystem = CreateDefaultRadientAssetResolver();
+            for (const auto& Path : {DecodedReference, DecodedImage})
+            {
+                RefCntAutoPtr<IRadientAssetLocation> Location;
+                ASSERT_EQ(Filesystem->ResolveAssetLocation({Path.c_str(), SourceURI.c_str()}, &Location), RADIENT_STATUS_OK);
+                EXPECT_EQ(Location->GetLocation(), FileSystem::SimplifyPath((Directory.Get() + "/" + Path.substr(2)).c_str()));
+            }
+            EXPECT_STREQ(Scene.Textures[0]->GetReference().URI, DecodedImage.c_str());
+        }
+        EXPECT_NE(std::find(Resolver->Requests.begin(), Resolver->Requests.end(), std::make_pair(DecodedReference, SourceURI)), Resolver->Requests.end());
+        EXPECT_NE(std::find(Resolver->Requests.begin(), Resolver->Requests.end(), std::make_pair(DecodedImage, SourceURI)), Resolver->Requests.end());
+        Pool->StopThreads();
+    }
+}
+
 TEST(RadientGLTFLoaderTest, LoadTexturesCreatesTextureAssetFromExternalImageURI)
 {
     RefCntAutoPtr<IThreadPool> pThreadPool = CreateThreadPool(ThreadPoolCreateInfo{0});
@@ -1472,10 +1595,8 @@ TEST(RadientGLTFLoaderTest, LoadTexturesUsesAssetResolverForExternalImageURI)
     ProcessQueuedTasks(*pThreadPool);
     EXPECT_EQ(pResolver->GetStats().ResolveLocationCount, 1u);
     EXPECT_EQ(pResolver->GetStats().OpenCount, 1u);
-    EXPECT_NE(pResolver->GetStats().LastURI.find("external.png"), std::string::npos);
-    // Document returns an external image URI already resolved relative to the GLTF.
-    // Passing the GLTF URI as a base again would prepend its directory twice.
-    EXPECT_TRUE(pResolver->GetStats().LastBaseURI.empty());
+    EXPECT_EQ(pResolver->GetStats().LastURI, "external.png");
+    EXPECT_EQ(pResolver->GetStats().LastBaseURI, GLTFPath);
     EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(Textures[0]), RADIENT_STATUS_OK);
     EXPECT_EQ(RadientTextureAssetManager::GetGPUResourceStatus(Textures[0]), RADIENT_STATUS_NO_GPU_DATA);
     pThreadPool->StopThreads();
@@ -1572,9 +1693,8 @@ TEST(RadientGLTFLoaderTest, LoadTexturesDoesNotResolveExternalImageURITwice)
     std::shared_ptr<GLTF::Document> pDocument = std::make_shared<GLTF::Document>(DocumentLoadInfo);
 
     GLTF::TextureSourceInfo Source;
-    ASSERT_TRUE(pDocument->GetTextureSourceInfo(0, Source));
-    EXPECT_TRUE(Source.URI == "Models/Box/external.png" ||
-                Source.URI == "Models\\Box\\external.png");
+    ASSERT_TRUE(pDocument->GetTextureSourceInfo(0, Source, false));
+    EXPECT_EQ(Source.URI, "external.png");
 
     RefCntAutoPtr<TestRadientAssetResolver> pResolver{MakeNewRCObj<TestRadientAssetResolver>()()};
     pResolver->AddAsset(Source.URI,
@@ -1597,7 +1717,7 @@ TEST(RadientGLTFLoaderTest, LoadTexturesDoesNotResolveExternalImageURITwice)
     ProcessQueuedTasks(*pThreadPool);
 
     EXPECT_EQ(pResolver->GetStats().LastURI, Source.URI);
-    EXPECT_TRUE(pResolver->GetStats().LastBaseURI.empty());
+    EXPECT_EQ(pResolver->GetStats().LastBaseURI, GLTFPath);
     EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(Textures[0]), RADIENT_STATUS_OK);
     pThreadPool->StopThreads();
 }
@@ -2543,6 +2663,7 @@ TEST(RadientGLTFLoaderTest, LoadSceneIgnoresIncompleteTriangleListTail)
                 const std::vector<Uint16> ExpectedIndices = ElementCount == 4 ?
                     std::vector<Uint16>{0, 1, 2} :
                     std::vector<Uint16>{4, 1, 3};
+
                 RefCntAutoPtr<IRadientMeshAsset> pExpectedMesh;
                 ASSERT_EQ(CreateExpectedTopologyMesh(*pAssetManager, ExpectedIndices, &pExpectedMesh), RADIENT_STATUS_PENDING);
                 ProcessQueuedTasks(*pThreadPool);
@@ -3265,4 +3386,47 @@ TEST(RadientGLTFLoaderTest, RejectedTextureLoadsDoNotRetainDocument)
     ASSERT_EQ(Textures.size(), 1u);
     ASSERT_NE(Textures[0], nullptr);
     EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(Textures[0]), RADIENT_STATUS_INVALID_OPERATION);
+}
+
+
+TEST(RadientGLTFLoaderTest, TextureReferencesRetainDocumentContextBeforeAndAfterLoading)
+{
+    auto              Pool    = CreateThreadPool(ThreadPoolCreateInfo{0});
+    auto              Manager = CreateLoaderAssetManager(Pool);
+    TempDirectory     First{"RadientFirstDocument"};
+    TempDirectory     Second{"RadientSecondDocument"};
+    const std::string FirstURI  = WriteGLTFExternalTextureFile(First);
+    const std::string SecondURI = WriteGLTFExternalTextureFile(Second);
+    auto              A         = LoadTextures(*Manager, FirstURI);
+    auto              B         = LoadTextures(*Manager, SecondURI);
+    ASSERT_EQ(A.size(), 1u);
+    ASSERT_EQ(B.size(), 1u);
+    ASSERT_NE(A[0], nullptr);
+    ASSERT_NE(B[0], nullptr);
+    for (bool Loaded : {false, true})
+    {
+        if (Loaded)
+            ProcessQueuedTasks(*Pool);
+        const auto& RefA = A[0]->GetReference();
+        const auto& RefB = B[0]->GetReference();
+        EXPECT_STREQ(RefA.URI, "external.png");
+        EXPECT_STREQ(RefB.URI, "external.png");
+        EXPECT_STREQ(RefA.BaseURI, FirstURI.c_str());
+        EXPECT_STREQ(RefB.BaseURI, SecondURI.c_str());
+        EXPECT_NE(RefA, RefB);
+    }
+    // The public reference is a complete reload request, with no filesystem
+    // interpretation or document-specific path concatenation by the caller.
+    const auto&            Reference = A[0]->GetReference();
+    RadientTextureLoadInfo CI;
+    CI.URI     = Reference.URI;
+    CI.BaseURI = Reference.BaseURI;
+    RefCntAutoPtr<IRadientTextureAsset> Reloaded;
+    ASSERT_EQ(Manager->LoadTexture(CI, &Reloaded), RADIENT_STATUS_PENDING);
+    EXPECT_EQ(Reloaded->GetReference(), Reference);
+    ProcessQueuedTasks(*Pool);
+    EXPECT_EQ(RadientTextureAssetManager::GetLoadStatus(Reloaded), RADIENT_STATUS_OK);
+    EXPECT_EQ(RadientTextureAssetManager::GetTexturePayload(Reloaded), RadientTextureAssetManager::GetTexturePayload(A[0]));
+    EXPECT_NE(RadientTextureAssetManager::GetTexturePayload(A[0]), RadientTextureAssetManager::GetTexturePayload(B[0]));
+    Pool->StopThreads();
 }

@@ -43,7 +43,8 @@ typedef struct IRadientAssetResolver IRadientAssetResolver;
 struct RadientAssetResolveInfo
 {
     /// Asset URI to resolve. This may be a file path, package path, memory URI,
-    /// network URI, or any resolver-defined identifier.
+    /// network URI, or any resolver-defined identifier. File paths are literal;
+    /// importers decode format-specific URI escaping before submitting file paths.
     const Char* URI DEFAULT_INITIALIZER(nullptr);
 
     /// Optional URI of the asset that references URI. Relative URIs are resolved
@@ -196,6 +197,7 @@ DILIGENT_END_INTERFACE
 #include "../../../DiligentCore/Primitives/interface/DefineGlobalFuncHelperMacros.h"
 
 /// Creates a filesystem resolver. The engine retains a supplied resolver.
+/// Literal paths are not decoded, including those supplied with BaseURI.
 RADIENT_STATUS DILIGENT_GLOBAL_FUNCTION(CreateRadientFilesystemAssetResolver)(
     const RadientFilesystemAssetResolverCreateInfo REF CreateInfo,
     IRadientAssetResolver**                            ppResolver);

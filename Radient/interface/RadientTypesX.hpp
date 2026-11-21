@@ -557,7 +557,7 @@ public:
         return *this;
     }
 
-    /// Releases both data sources while preserving URI, BaseURI, and EncodedTextureIsSRGB.
+    /// Releases both data sources while preserving URI, BaseURI, and loading options.
     RadientTextureLoadInfoX& ClearSourceData() noexcept { return SetDataBlob(nullptr); }
 
     /// Returns the C descriptor view without allocating or acquiring blob access.

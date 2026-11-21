@@ -40,7 +40,7 @@ namespace Diligent
 namespace
 {
 
-constexpr Uint32 MeshViewSourceCacheKeyVersion = 3;
+constexpr Uint32 MeshViewSourceCacheKeyVersion = 4;
 
 void UpdateString(XXH128State& Hasher, const Char* Str)
 {
@@ -64,6 +64,7 @@ void HashMaterial(XXH128State& Hasher, IRadientMaterialAsset* pMaterial)
     {
         UpdateString(Hasher, MaterialRef.URI);
         Hasher.Update(MaterialRef.Version);
+        UpdateString(Hasher, MaterialRef.BaseURI);
     }
     else
     {

@@ -43,6 +43,19 @@ export function registerTests({test, assert, api, constants, testData, assets}) 
         assert.deepEqual(texture.GetDesc(), {Width: 2, Height: 1, Format: SRGB, MipLevels: 2});
     });
 
+    test("texture references preserve their base in independent snapshots", async t => {
+        const f = createAssetFixture(t, api, assert, constants, testData);
+        const texture = f.asset(f.manager.LoadTexture({URI: "image%2Etga", BaseURI: "opaque:document/model.gltf",
+            pDataBlob: f.blob(assets["colors.tga"])}));
+        const before = texture.GetReference();
+        await f.ready(texture);
+        const after = texture.GetReference();
+        assert.deepEqual(before, after);
+        texture.dispose();
+        assert.equal(after.URI, "image%2Etga");
+        assert.equal(after.BaseURI, "opaque:document/model.gltf");
+    });
+
     test("texture inputs preserve validation failures and reject an active blob writer", t => {
         const f = createAssetFixture(t, api, assert, constants, testData);
         assert.equal(f.manager.LoadTexture({pTextureData: {Width: 1, Height: 1, Format: RGBA}}).status, INVALID);

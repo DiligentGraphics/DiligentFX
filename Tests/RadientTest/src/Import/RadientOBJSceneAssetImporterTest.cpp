@@ -25,6 +25,9 @@
  */
 
 #include "gtest/gtest.h"
+#include "TempDirectory.hpp"
+#include "Assets/RadientAssetResolver.hpp"
+#include <fstream>
 #include "TestingEnvironment.hpp"
 #include "ThreadPool.hpp"
 #include "Assets/RadientAssetManagerImpl.hpp"
@@ -404,3 +407,54 @@ TEST_F(RadientOBJSceneAssetImporterTest, PropagatesResolverCancellation)
 }
 
 } // namespace
+
+
+TEST(RadientOBJSceneAssetImporterFilesystemTest, PreservesLiteralPercentEscapesInMaterialAndTextureFilenames)
+{
+    TempDirectory     Directory{"RadientOBJLiteralPaths"};
+    const std::string Root  = Directory.Get() + "/model.obj";
+    auto              Write = [&](const std::string& Name, const std::string& Data) {
+        std::ofstream File{Directory.Get() + "/" + Name, std::ios::binary};
+        File.write(Data.data(), static_cast<std::streamsize>(Data.size()));
+        EXPECT_TRUE(File.good());
+    };
+    Write("model.obj", std::string{"mtllib paint%20red.mtl\nusemtl Paint\n"} + Triangle);
+    Write("paint%20red.mtl", "newmtl Paint\nKd 1 0 0\nmap_Kd paint%20red.png\n");
+    // A decoded spelling exists too: choosing it must not silently change the material.
+    Write("paint red.mtl", "newmtl Paint\nKd 0 1 0\n");
+    Write("paint%20red.png", {reinterpret_cast<const char*>(WhitePng.data()), WhitePng.size()});
+    auto                                Resolver = CreateDefaultRadientAssetResolver();
+    auto                                Pool     = CreateThreadPool(ThreadPoolCreateInfo{0});
+    RadientAssetManagerImpl::CreateInfo CI;
+    CI.pThreadPool                                = Pool;
+    CI.Assets.pAssetResolver                      = Resolver;
+    auto                                 Manager  = RadientAssetManagerImpl::Create(CI);
+    auto                                 Services = Manager->CreateMeshImportServices();
+    RefCntAutoPtr<IRadientMaterialAsset> DefaultMaterial;
+    ASSERT_EQ(CreateStandardMaterialAsset(*Manager, {}, &DefaultMaterial), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientAssetData> Source;
+    ASSERT_EQ(OpenAsset(Resolver, {Root.c_str()}, &Source), RADIENT_STATUS_OK);
+    RadientSceneAssetImportContext Context;
+    Context.pSourceData         = Source;
+    Context.pAssetResolver      = Resolver;
+    Context.pAssetManager       = Manager;
+    Context.pMeshImportServices = Services;
+    Context.pDefaultMaterial    = DefaultMaterial;
+    RadientImport::ImportedDocument Document;
+    const auto                      Status = CreateRadientOBJSceneAssetImporter()->Import(Context, Document);
+    // Drain before fatal assertions, including when a broken importer queued
+    // geometry but returned the wrong material or texture selection.
+    while (Pool->GetQueueSize() != 0)
+        Pool->ProcessTask(0, false);
+    Pool->StopThreads();
+    ASSERT_EQ(Status, RADIENT_STATUS_OK);
+    ASSERT_EQ(Document.Textures.size(), 1u);
+    ASSERT_EQ(Document.Meshes.size(), 1u);
+    ASSERT_EQ(GetRadientAssetLoadStatus(Document.Meshes[0]), RADIENT_STATUS_OK);
+    ASSERT_EQ(GetRadientAssetLoadStatus(Document.Textures[0]), RADIENT_STATUS_OK);
+    const auto Color = GetMaterialParameter<RadientFloat4>(*Document.Meshes[0]->GetDesc().pPrimitives[0].pMaterial, RadientStandardMaterialDiffuseFactorName);
+    EXPECT_FLOAT_EQ(Color.x, 1.f);
+    EXPECT_FLOAT_EQ(Color.y, 0.f);
+    EXPECT_STREQ(Document.Textures[0]->GetReference().URI, "paint%20red.png");
+    Pool->StopThreads();
+}

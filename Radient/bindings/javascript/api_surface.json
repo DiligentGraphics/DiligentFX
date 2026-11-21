@@ -556,6 +556,7 @@
     "Diligent::RadientAssetManagerDesc": {"bases": [], "kind": "record"},
     "Diligent::RadientAssetManagerDesc::Name": {"default": "nullptr", "kind": "field", "policy": {"direction": "inout", "lifetime": "call", "nullable": true, "ownership": "borrowed"}, "type": "const char_s:8*"},
     "Diligent::RadientAssetReference": {"bases": [], "kind": "record"},
+    "Diligent::RadientAssetReference::BaseURI": {"default": "nullptr", "kind": "field", "policy": {"direction": "out", "lifetime": "call", "nullable": true, "ownership": "borrowed"}, "type": "const char_s:8*"},
     "Diligent::RadientAssetReference::URI": {"default": "nullptr", "kind": "field", "policy": {"direction": "out", "lifetime": "call", "nullable": true, "ownership": "borrowed"}, "type": "const char_s:8*"},
     "Diligent::RadientAssetReference::Version": {"default": "0", "kind": "field", "type": "ulonglong:64"},
     "Diligent::RadientBloomDesc": {"bases": [], "kind": "record"},

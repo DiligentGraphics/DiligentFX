@@ -650,7 +650,7 @@ RADIENT_STATUS CreateMorphTargetDataAssets(GLTF::Mesh&                          
 
                 for (size_t AttributeIndex = 0; AttributeIndex < Target.Attributes.size(); ++AttributeIndex)
                 {
-                    const MorphTargetAttributeSchema& Attribute = Target.Attributes[AttributeIndex];
+                    const MorphTargetAttributeSchema& Attribute                = Target.Attributes[AttributeIndex];
                     AttributeDescs[TargetIndex][AttributeIndex].Semantic       = Attribute.Semantic.c_str();
                     AttributeDescs[TargetIndex][AttributeIndex].ComponentCount = Attribute.ComponentCount;
 
@@ -974,7 +974,7 @@ RadientImport::TextureAssetList LoadTextures(IRadientAssetManager&              
     for (Uint32 TextureIndex = 0; TextureIndex < TextureCount; ++TextureIndex)
     {
         GLTF::TextureSourceInfo Source;
-        if (!pDocument->GetTextureSourceInfo(TextureIndex, Source))
+        if (!pDocument->GetTextureSourceInfo(TextureIndex, Source, false))
         {
             LOG_ERROR_MESSAGE("Failed to resolve GLTF texture source ", TextureIndex, " in '", SourceURI, "'");
             continue;
@@ -987,9 +987,9 @@ RadientImport::TextureAssetList LoadTextures(IRadientAssetManager&              
 
         RadientTextureLoadInfo LoadInfo;
         LoadInfo.URI = TextureURI.c_str();
-        // External image URIs returned by GetTextureSourceInfo() are already
-        // resolved relative to the GLTF document, so no base URI is needed.
-        LoadInfo.BaseURI = nullptr;
+        // GLTF escaping is decoded once by Document. Leave the path relative
+        // and let the resolver anchor it to the referring asset.
+        LoadInfo.BaseURI = !Source.URI.empty() ? SourceURI.c_str() : nullptr;
 
         const TextureColorSpaceUsage& Usage = TextureUsages[TextureIndex];
         if (Usage.SRGB && Usage.Linear)
@@ -1003,7 +1003,7 @@ RadientImport::TextureAssetList LoadTextures(IRadientAssetManager&              
         if (Source.pData != nullptr)
         {
             // Retain the document while queued loads or decoders reference its image bytes.
-            auto pDocumentOwner = std::make_unique<std::shared_ptr<const GLTF::Document>>(pDocument);
+            auto                      pDocumentOwner = std::make_unique<std::shared_ptr<const GLTF::Document>>(pDocument);
             RadientDataBlobCreateInfo BlobCI;
             BlobCI.pData     = Source.pData;
             BlobCI.Size      = Source.DataSize;

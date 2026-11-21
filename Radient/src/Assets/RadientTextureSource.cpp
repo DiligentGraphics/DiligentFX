@@ -550,16 +550,16 @@ void RadientTextureSource::ReleaseMemory()
 
 void RadientTextureSource::MoveFrom(RadientTextureSource&& Rhs) noexcept
 {
-    m_Status                = Rhs.m_Status;
-    m_ReadAccess            = std::move(Rhs.m_ReadAccess);
-    m_SourceType            = Rhs.m_SourceType;
-    m_URI                   = std::move(Rhs.m_URI);
-    m_BaseURI               = std::move(Rhs.m_BaseURI);
-    m_EncodedTextureIsSRGB  = Rhs.m_EncodedTextureIsSRGB;
-    m_DataSize              = Rhs.m_DataSize;
-    m_TextureData           = Rhs.m_TextureData;
-    m_Mips                  = std::move(Rhs.m_Mips);
-    m_pData                 = Rhs.m_pData;
+    m_Status               = Rhs.m_Status;
+    m_ReadAccess           = std::move(Rhs.m_ReadAccess);
+    m_SourceType           = Rhs.m_SourceType;
+    m_URI                  = std::move(Rhs.m_URI);
+    m_BaseURI              = std::move(Rhs.m_BaseURI);
+    m_EncodedTextureIsSRGB = Rhs.m_EncodedTextureIsSRGB;
+    m_DataSize             = Rhs.m_DataSize;
+    m_TextureData          = Rhs.m_TextureData;
+    m_Mips                 = std::move(Rhs.m_Mips);
+    m_pData                = Rhs.m_pData;
 
     Rhs.m_Status     = RADIENT_STATUS_INVALID_ARGUMENT;
     Rhs.m_SourceType = SourceType::Invalid;
