@@ -82,6 +82,7 @@ struct RadientNetworkAssetResolverCreateInfo
     /// On Android, this limits TCP establishment only. TLS negotiation uses the
     /// read timeout derived from the remaining RequestTimeoutMs budget; DNS lookup
     /// is controlled by the platform and may outlast either timeout.
+    /// On the Web, this bounds the wait for response headers instead.
     /// Must be nonzero and no greater than INT32_MAX.
     Uint32 ConnectTimeoutMs DEFAULT_INITIALIZER(10000);
 
@@ -92,7 +93,7 @@ struct RadientNetworkAssetResolverCreateInfo
     Uint32 RequestTimeoutMs DEFAULT_INITIALIZER(60000);
 
     /// Maximum number of HTTP redirects to follow, no greater than INT32_MAX.
-    /// Zero disables redirects.
+    /// Zero disables redirects. On the Web, positive values use the browser limit.
     Uint32 MaxRedirects DEFAULT_INITIALIZER(10);
 
 #if PLATFORM_ANDROID
@@ -244,10 +245,11 @@ RADIENT_STATUS DILIGENT_GLOBAL_FUNCTION(CreateRadientFilesystemAssetResolver)(
 /// Creates a network resolver for HTTP/HTTPS URLs and relative URL references.
 /// ResolveAssetLocation performs URL resolution without network I/O and removes
 /// fragments. CheckAsset uses HTTP HEAD; servers that reject HEAD return FAILED.
-/// OpenAsset downloads the complete resource and follows up to MaxRedirects redirects.
+/// OpenAsset downloads the complete resource. Native transfers follow up to
+/// MaxRedirects redirects; Web transfers use the browser behavior described below.
 /// HTTP 404/410 return NOT_FOUND; transport errors, timeouts, other unsuccessful HTTP
 /// responses, and incomplete transfers return FAILED. Partial data is never published.
-/// TLS certificate and hostname verification use the configured native trust store.
+/// TLS verification uses the configured native trust store or browser security policy.
 /// Calls are synchronous and may run concurrently, using independent transfers.
 /// The resolver interface has no cancellation token: stopping an asset manager does
 /// not interrupt an active transfer. Timeouts limit the network transfer, but curl's
@@ -261,7 +263,12 @@ RADIENT_STATUS DILIGENT_GLOBAL_FUNCTION(CreateRadientFilesystemAssetResolver)(
 /// On Apple platforms, NSURLSession determines whether a compressed response is valid;
 /// the curl transport's additional end-of-stream and checksum validation is not applied.
 /// Apple App Transport Security and application network permissions remain in effect.
-/// The browser transport is not implemented yet; Web builds currently return UNSUPPORTED.
+/// On the Web, content decoding and validation are delegated to fetch.
+/// CheckAsset/OpenAsset require a worker thread and return INVALID_OPERATION on the
+/// runtime thread. Keep the browser event loop running until all calls finish.
+/// Fetch enforces CORS and browser security policies. ConnectTimeoutMs bounds the wait
+/// for response headers; RequestTimeoutMs bounds the complete transfer. MaxRedirects=0
+/// disables redirects; positive values use the browser's built-in redirect limit.
 RADIENT_STATUS DILIGENT_GLOBAL_FUNCTION(CreateRadientNetworkAssetResolver)(
     const RadientNetworkAssetResolverCreateInfo REF CreateInfo,
     IRadientAssetResolver**                         ppResolver);

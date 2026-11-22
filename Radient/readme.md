@@ -125,10 +125,21 @@ the referring asset's full identity, not just its directory. This also resolves
 dependencies relative to the final location after a redirect. Built-in importers
 pass this context automatically; custom resolvers define how to interpret it.
 
-The browser network transport is not implemented yet;
-`CreateRadientNetworkAssetResolver` returns `RADIENT_STATUS_UNSUPPORTED` on the
-Web. See [RadientAssetResolver.h](interface/RadientAssetResolver.h) for the
-complete resolver contract and failure statuses.
+On the Web, the resolver uses browser `fetch`. Location resolution and factory
+creation can run on any thread; `CheckAsset` and `OpenAsset` require a worker
+and return `INVALID_OPERATION` on the runtime thread. Requests are dispatched
+to the runtime event loop while workers wait; JSPI and Asyncify are not required.
+Keep the event loop and worker pool alive until requests complete.
+
+Browser CORS, mixed-content, and other security restrictions apply. Fetch uses
+`credentials: omit`; authenticated request configuration is not exposed yet.
+`ConnectTimeoutMs` bounds the wait for response headers, and `RequestTimeoutMs`
+covers the complete transfer. A timeout aborts fetch. Zero `MaxRedirects` disables
+redirects; positive values use the browser redirect limit. The browser handles
+HTTP decompression and validation.
+
+See [RadientAssetResolver.h](interface/RadientAssetResolver.h) for the complete
+resolver contract and failure statuses.
 
 For source-build prerequisites and offline configuration, see
 [Building Radient](docs/Building.md).

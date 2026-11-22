@@ -246,12 +246,20 @@ if(RADIENT_GENERATE_BINDINGS OR RADIENT_BUILD_JAVA_BINDINGS)
     add_subdirectory(bindings)
 endif()
 
-if(PLATFORM_APPLE)
+if(PLATFORM_WEB)
+    # The network resolver calls these native functions from EM_JS. Its JS
+    # dependencies do not retain native exports; propagate additive linker
+    # requirements without replacing the application's EXPORTED_FUNCTIONS.
+    target_link_options(Radient INTERFACE
+        "-Wl,--export=malloc"
+        "-Wl,--export=free"
+    )
+elseif(PLATFORM_APPLE)
     target_link_libraries(Radient PRIVATE "-framework Foundation")
 elseif(PLATFORM_ANDROID)
     # Android supplies HTTP and TLS through java.net; only content decoding uses zlib.
     target_link_libraries(Radient PRIVATE ZLIB::ZLIB)
-elseif(NOT PLATFORM_WEB)
+else()
     include(cmake/RadientCurl.cmake)
     radient_fetch_curl()
     target_link_libraries(Radient PRIVATE libcurl_static ZLIB::ZLIB)

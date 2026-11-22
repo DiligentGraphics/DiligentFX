@@ -29,6 +29,8 @@
 #include "RadientAssetResolver.h"
 #include "ObjectBase.hpp"
 
+#include <cstdlib>
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
@@ -40,27 +42,43 @@ namespace Diligent
 class RadientAssetDataImpl final : public ObjectBase<IRadientAssetData>
 {
 public:
-    using TBase = ObjectBase<IRadientAssetData>;
+    using TBase       = ObjectBase<IRadientAssetData>;
+    using OwnedBuffer = std::unique_ptr<void, decltype(&std::free)>;
 
     RadientAssetDataImpl(IReferenceCounters* pRefCounters,
                          std::vector<Uint8>  Data,
                          std::string         ResolvedURI) :
         TBase{pRefCounters},
         m_Data{std::move(Data)},
+        m_Size{m_Data.size()},
         m_ResolvedURI{std::move(ResolvedURI)}
     {
+    }
+
+    // Adopts an existing allocation without copying its contents. The deleter
+    // remains responsible for releasing the bytes when the last reference expires.
+    RadientAssetDataImpl(IReferenceCounters* pRefCounters,
+                         OwnedBuffer         Data,
+                         size_t              Size,
+                         std::string         ResolvedURI) :
+        TBase{pRefCounters},
+        m_ExternalData{std::move(Data)},
+        m_Size{Size},
+        m_ResolvedURI{std::move(ResolvedURI)}
+    {
+        VERIFY_EXPR(Size == 0 || m_ExternalData != nullptr);
     }
 
     IMPLEMENT_QUERY_INTERFACE_IN_PLACE(IID_RadientAssetData, TBase)
 
     virtual const void* DILIGENT_CALL_TYPE GetData() const override final
     {
-        return !m_Data.empty() ? m_Data.data() : nullptr;
+        return m_Size != 0 ? (m_ExternalData ? m_ExternalData.get() : m_Data.data()) : nullptr;
     }
 
     virtual size_t DILIGENT_CALL_TYPE GetSize() const override final
     {
-        return m_Data.size();
+        return m_Size;
     }
 
     virtual const Char* DILIGENT_CALL_TYPE GetResolvedURI() const override final
@@ -69,8 +87,11 @@ public:
     }
 
 private:
+    // Only one storage owner is populated by each constructor.
     std::vector<Uint8> m_Data;
-    std::string        m_ResolvedURI;
+    OwnedBuffer        m_ExternalData{nullptr, std::free};
+    const size_t       m_Size;
+    const std::string  m_ResolvedURI;
 };
 
 } // namespace Diligent

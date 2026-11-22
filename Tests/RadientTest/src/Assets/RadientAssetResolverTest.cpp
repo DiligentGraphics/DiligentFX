@@ -24,6 +24,7 @@
  *  of the possibility of such damages.
  */
 
+#include "Assets/RadientAssetData.hpp"
 #include "Assets/RadientAssetResolver.hpp"
 #include "Assets/RadientFilesystemAssetResolver.hpp"
 
@@ -324,4 +325,50 @@ TEST(RadientAssetResolverTest, PreservesPercentEscapesInDependencyPaths)
     }
     RefCntAutoPtr<IRadientAssetLocation> Location;
     EXPECT_EQ(Resolver->ResolveAssetLocation({"https://example.com/image.png", Base.c_str()}, &Location), RADIENT_STATUS_INVALID_ARGUMENT);
+}
+
+TEST(RadientAssetDataTest, AdoptsAllocationWithoutCopyAndReleasesItOnce)
+{
+    static int Releases = 0;
+    Releases            = 0;
+    RadientAssetDataImpl::OwnedBuffer Bytes{std::malloc(4), [](void* Data) noexcept {
+                                                ++Releases;
+                                                std::free(Data);
+                                            }};
+    ASSERT_NE(Bytes, nullptr);
+    auto* Original = static_cast<Uint8*>(Bytes.get());
+    Original[0]    = 17;
+    Original[3]    = 29;
+    RefCntAutoPtr<IRadientAssetData> Data{MakeNewRCObj<RadientAssetDataImpl>()(
+        std::move(Bytes), size_t{4}, "https://example.com/asset.bin")};
+    EXPECT_EQ(Bytes, nullptr);
+    EXPECT_EQ(Data->GetData(), Original);
+    EXPECT_EQ(Data->GetSize(), 4u);
+    EXPECT_STREQ(Data->GetResolvedURI(), "https://example.com/asset.bin");
+    RefCntAutoPtr<IRadientAssetData> Retained{Data};
+    Data.Release();
+    EXPECT_EQ(Releases, 0);
+    EXPECT_EQ(static_cast<const Uint8*>(Retained->GetData())[0], 17u);
+    EXPECT_EQ(static_cast<const Uint8*>(Retained->GetData())[3], 29u);
+    Retained.Release();
+    EXPECT_EQ(Releases, 1);
+}
+
+TEST(RadientAssetDataTest, AcceptsEmptyOwnedBuffer)
+{
+    RefCntAutoPtr<IRadientAssetData> Data{MakeNewRCObj<RadientAssetDataImpl>()(
+        RadientAssetDataImpl::OwnedBuffer{nullptr, std::free}, size_t{0}, "empty")};
+    EXPECT_EQ(Data->GetData(), nullptr);
+    EXPECT_EQ(Data->GetSize(), 0u);
+    EXPECT_STREQ(Data->GetResolvedURI(), "empty");
+}
+
+TEST(RadientAssetDataTest, PreservesVectorOwnershipWithoutCopy)
+{
+    std::vector<Uint8>               Bytes{1, 2, 3};
+    const auto*                      Original = Bytes.data();
+    RefCntAutoPtr<IRadientAssetData> Data{MakeNewRCObj<RadientAssetDataImpl>()(std::move(Bytes), "vector")};
+    EXPECT_EQ(Data->GetData(), Original);
+    EXPECT_EQ(Data->GetSize(), 3u);
+    EXPECT_EQ(static_cast<const Uint8*>(Data->GetData())[2], 3u);
 }

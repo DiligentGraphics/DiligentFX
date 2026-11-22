@@ -29,6 +29,7 @@
 #include "RadientAssetResolver.h"
 #include "ObjectBase.hpp"
 
+#include <limits>
 #include <string>
 #include <utility>
 
@@ -62,6 +63,13 @@ inline RADIENT_STATUS GetHTTPStatus(long Code)
         return RADIENT_STATUS_NOT_FOUND;
     // No range was requested. A partial response is not a complete asset.
     return Code >= 200 && Code < 300 && Code != 206 ? RADIENT_STATUS_OK : RADIENT_STATUS_FAILED;
+}
+
+inline bool IsValidCreateInfo(const RadientNetworkAssetResolverCreateInfo& Info)
+{
+    constexpr Uint32 MaxTimeout = static_cast<Uint32>((std::numeric_limits<Int32>::max)());
+    return Info.ConnectTimeoutMs != 0 && Info.ConnectTimeoutMs <= MaxTimeout &&
+        Info.RequestTimeoutMs != 0 && Info.RequestTimeoutMs <= MaxTimeout && Info.MaxRedirects <= MaxTimeout;
 }
 
 } // namespace NetworkAssetResolverDetail
