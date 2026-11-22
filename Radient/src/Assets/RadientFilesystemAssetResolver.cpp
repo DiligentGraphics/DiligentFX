@@ -25,6 +25,7 @@
  */
 
 #include "Assets/RadientFilesystemAssetResolver.hpp"
+#include "Assets/RadientAssetData.hpp"
 
 #include "FileSystem.hpp"
 #include "FileWrapper.hpp"
@@ -75,43 +76,6 @@ public:
 private:
     std::string m_Location;
     std::string m_ReadPath;
-};
-
-// Owns resolved bytes together with the canonical URI that identifies them.
-class RadientAssetDataImpl final : public ObjectBase<IRadientAssetData>
-{
-public:
-    using TBase = ObjectBase<IRadientAssetData>;
-
-    RadientAssetDataImpl(IReferenceCounters* pRefCounters,
-                         std::vector<Uint8>  Data,
-                         std::string         ResolvedURI) :
-        TBase{pRefCounters},
-        m_Data{std::move(Data)},
-        m_ResolvedURI{std::move(ResolvedURI)}
-    {
-    }
-
-    IMPLEMENT_QUERY_INTERFACE_IN_PLACE(IID_RadientAssetData, TBase)
-
-    virtual const void* DILIGENT_CALL_TYPE GetData() const override final
-    {
-        return !m_Data.empty() ? m_Data.data() : nullptr;
-    }
-
-    virtual size_t DILIGENT_CALL_TYPE GetSize() const override final
-    {
-        return m_Data.size();
-    }
-
-    virtual const Char* DILIGENT_CALL_TYPE GetResolvedURI() const override final
-    {
-        return m_ResolvedURI.c_str();
-    }
-
-private:
-    std::vector<Uint8> m_Data;
-    std::string        m_ResolvedURI;
 };
 
 } // namespace

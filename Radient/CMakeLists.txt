@@ -91,6 +91,7 @@ set(INCLUDE
     include/Assets/RadientAssetCache.hpp
     include/Assets/RadientAssetManagerImpl.hpp
     include/Assets/RadientAssetResolver.hpp
+    include/Assets/RadientAssetData.hpp
     include/Assets/RadientAssetURI.hpp
     include/Assets/RadientAssetValidation.hpp
     include/Assets/RadientCacheKeyBuilder.hpp
