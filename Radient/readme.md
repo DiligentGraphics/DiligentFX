@@ -85,7 +85,8 @@ To configure resolution explicitly, create a resolver with
 then assign it to `RadientEngineCreateInfo::Assets.pAssetResolver` before calling
 `CreateRadientEngine`. When creating an asset manager directly, use
 `RadientAssetManagerCreateInfo::pAssetResolver`. The engine retains the supplied
-resolver, which receives requests for all assets and their dependencies.
+resolver, which receives requests for all assets and their dependencies. JavaScript
+and Java expose both factories and accept the resolver through the same engine settings.
 
 The filesystem factory accepts an optional `BaseDirectory` for relative requests
 without `BaseURI`. A supplied directory is captured as an absolute path at

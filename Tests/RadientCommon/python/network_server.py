@@ -1,4 +1,4 @@
-"""Loopback HTTP fixtures for the Radient browser network resolver tests."""
+"""Shared loopback HTTP fixtures for Radient network resolver tests."""
 
 import gzip
 import json

@@ -18,13 +18,17 @@ export function createAssetFixture(t, api, assert, constants, testData, engineIn
         assert.ok(result.value !== null);
         return keep(result.value);
     }
-    async function ready(object) {
+    async function loadStatus(object) {
         const deadline = Date.now() + 15000;
         let status;
         while ((status = api.GetRadientAssetLoadStatus(object)) === PENDING && Date.now() < deadline) {
             await new Promise(resolve => setTimeout(resolve, 1));
         }
-        assert.equal(status, OK);
+        assert.ok(status !== PENDING, "Asset load timed out");
+        return status;
+    }
+    async function ready(object) {
+        assert.equal(await loadStatus(object), OK);
         return object;
     }
     function triangle(extra = {}) {
@@ -49,5 +53,5 @@ export function createAssetFixture(t, api, assert, constants, testData, engineIn
             pAttributeData: [{pDeltaBuffer: deltas, ByteOffset: offset}],
         };
     }
-    return {...fixture, data, manager, keep, blob, asset, ready, triangle, morphTarget};
+    return {...fixture, data, manager, keep, blob, asset, loadStatus, ready, triangle, morphTarget};
 }

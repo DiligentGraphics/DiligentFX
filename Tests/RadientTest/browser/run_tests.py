@@ -6,6 +6,7 @@ import sys
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[3] / "DiligentCore" / "Tests" / "TestFramework" / "browser"))
 from browser_tests import main
+sys.path.insert(0, str(HERE.parents[1] / "RadientCommon" / "python"))
 from network_server import handle_request
 
 

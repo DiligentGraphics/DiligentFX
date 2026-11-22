@@ -19,6 +19,7 @@ their respective test files; test operations are not moved behind native helpers
 | `AnimationTest.java` | `animation_tests.mjs` | 4: sampler copies and scene evaluation, registry removal/retention, quaternion outputs, material/pose/morph destinations |
 | `MorphTest.java` | `morph_tests.mjs` | 1: delta blobs and offsets, mutable weight snapshots/versioning, validation/defaults, scene-component lifetimes |
 | `SkinningTest.java` | `skinning_tests.mjs` | 2: descriptor copies and pose arrays, deferred commits/versioning, skinning/transpose/defaults/validation, retained scene skin/pose |
+| `NetworkTest.java` | `network_tests.mjs` | 4: factory validation, default routing, retained explicit resolver, disabled redirects |
 | `ImportTest.java` | `import_tests.mjs` | 3: GLB animation and instantiation, OBJ with relative MTL, unsupported importer outputs |
 
 [`fixtures.properties`](fixtures.properties) supplies the byte patterns, UTF-8
@@ -36,7 +37,7 @@ Node runner loads it directly. Browser CTest commands use `--test-data` to pass
 the identical text to the suite. Missing fixtures fail the test rather than use
 fallback values.
 
-The 47 Java cases match their JavaScript counterparts. `AssetFixture.java` and
+The 51 Java cases match their JavaScript counterparts. `AssetFixture.java` and
 `asset_test_helpers.mjs` create the same triangle, retain returned interfaces,
 and poll CPU load status for up to 15 seconds, accepting both `OK` and `PENDING`
 when work is submitted. These tests create no GPU and never wait for uploads.
@@ -102,3 +103,12 @@ independent shared expectations for the untouched AgX defaults.
 
 Browser initialization, Wasm runtime behavior, and browser golden-image rendering
 remain JavaScript-specific. These ports do not repeat the native GPU render suite.
+
+Network suites reuse the HTTP handler and generated glTF/GLB, vertex buffer, and
+texture fixtures in `Tests/RadientCommon/python/network_server.py`, also used by
+the native CPU tests in Chrome. `run_network_tests.py` starts a loopback server on
+an ephemeral port, runs the selected Java/Node/browser command, and stops the
+server on completion or failure. CTest starts it automatically; no external
+server or internet access is needed. The browser runner uses the production
+Radient Wasm module without JSPI/Asyncify. Imports, instantiation, and texture
+inspection are performed through the language API, not native test adapters.

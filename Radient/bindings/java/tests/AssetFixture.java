@@ -53,7 +53,7 @@ final class AssetFixture implements AutoCloseable {
         return object;
     }
 
-    <T extends IRadientAsset> T ready(T object) {
+    int loadStatus(IRadientAsset object) {
         long deadline = System.nanoTime() + 15_000_000_000L;
         int status;
         while ((status = GetRadientAssetLoadStatus(object)) == RADIENT_STATUS_PENDING && System.nanoTime() < deadline) {
@@ -63,7 +63,12 @@ final class AssetFixture implements AutoCloseable {
                 throw new AssertionError("Interrupted while loading an asset", error);
             }
         }
-        ok(status);
+        check(status != RADIENT_STATUS_PENDING);
+        return status;
+    }
+
+    <T extends IRadientAsset> T ready(T object) {
+        ok(loadStatus(object));
         return object;
     }
 

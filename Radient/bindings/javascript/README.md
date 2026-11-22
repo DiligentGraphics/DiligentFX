@@ -482,5 +482,17 @@ and supplied through `RadientEngineCreateInfo.Assets.pAssetResolver`. Its option
 `BaseDirectory` supplies the base for relative top-level requests; dependencies
 resolve relative to their referring asset. The engine retains the resolver, so
 its application wrapper may be released after engine creation. Resolver I/O
-methods are native-only. Without an explicit resolver, filesystem loading uses
-the existing default. Browser paths refer to the virtual filesystem.
+methods are native-only. Without an explicit resolver, the engine routes local paths to the
+filesystem and HTTP/HTTPS URLs to the network. Browser paths refer to the virtual filesystem.
+
+`CreateRadientNetworkAssetResolver` accepts `ConnectTimeoutMs`, `RequestTimeoutMs`,
+and `MaxRedirects`. Pass its returned resolver through
+`RadientEngineCreateInfo.Assets.pAssetResolver`; the engine retains it, so the
+language wrapper can be closed/disposed after engine creation. Resolver methods
+remain native-only. Use the factory when custom network settings are needed;
+default routing already supports ordinary HTTP/HTTPS loading.
+
+Browser networking uses fetch and obeys CORS. Load through the asset manager and
+poll `GetRadientAssetLoadStatus()` asynchronously so the browser can process
+network callbacks. No JSPI or Asyncify is required. Browser timeout and redirect
+semantics are documented in the [network resolver contract](../../readme.md#network-asset-resolver).

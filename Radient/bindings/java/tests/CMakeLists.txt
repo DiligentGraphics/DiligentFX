@@ -22,11 +22,19 @@ set_target_properties(Radient-JavaTests PROPERTIES FOLDER "DiligentFX/Bindings")
 file(GLOB JAVA_TESTS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*Test.java")
 foreach(TEST_FILE IN LISTS JAVA_TESTS)
     get_filename_component(TEST_NAME "${TEST_FILE}" NAME_WE)
+    set(TEST_RUNNER)
+    if(TEST_NAME STREQUAL "NetworkTest")
+        set(TEST_RUNNER "${RADIENT_BINDINGS_PYTHON_EXECUTABLE}" -B
+            "${CMAKE_CURRENT_SOURCE_DIR}/../../tests/integration/run_network_tests.py" --)
+    endif()
     add_test(NAME "Radient-Java-${TEST_NAME}"
-        COMMAND "${Java_JAVA_EXECUTABLE}" -Xcheck:jni
+        COMMAND ${TEST_RUNNER} "${Java_JAVA_EXECUTABLE}" -Xcheck:jni
             "-Djava.library.path=$<TARGET_FILE_DIR:RadientJNI>"
             "-Dradient.test.fixtures=${CMAKE_CURRENT_SOURCE_DIR}/../../tests/integration/fixtures.properties"
             -cp "${TEST_CLASSPATH}" "diligent.radient.tests.${TEST_NAME}")
     set_tests_properties("Radient-Java-${TEST_NAME}"
         PROPERTIES LABELS "Radient;Bindings;Java" TIMEOUT 60)
+    if(TEST_NAME STREQUAL "NetworkTest")
+        set_tests_properties("Radient-Java-${TEST_NAME}" PROPERTIES TIMEOUT 90)
+    endif()
 endforeach()

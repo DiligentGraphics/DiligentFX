@@ -11,11 +11,19 @@ file(GLOB SUITES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*_tests.mjs")
 list(APPEND SUITES "${BINDING_TOOLS}/javascript/tests/wasm_binary_tests.mjs")
 foreach(SUITE IN LISTS SUITES)
     get_filename_component(SUITE_NAME "${SUITE}" NAME_WE)
+    set(NODE_RUNNER)
+    set(BROWSER_RUNNER)
+    if(SUITE_NAME STREQUAL "network_tests")
+        set(NETWORK_RUNNER "${CMAKE_CURRENT_SOURCE_DIR}/../../tests/integration/run_network_tests.py")
+        set(NODE_RUNNER "${RADIENT_BINDINGS_PYTHON_EXECUTABLE}" -B "${NETWORK_RUNNER}" --)
+        set(BROWSER_RUNNER "${RADIENT_BINDINGS_PYTHON_EXECUTABLE}" -B "${NETWORK_RUNNER}"
+            --browser-fixtures "${CMAKE_CURRENT_SOURCE_DIR}/../../tests/integration/fixtures.properties" --)
+    endif()
     add_test(NAME "Radient-JavaScript-Node-${SUITE_NAME}"
-        COMMAND "${RADIENT_BINDINGS_NODE_EXECUTABLE}"
+        COMMAND ${NODE_RUNNER} "${RADIENT_BINDINGS_NODE_EXECUTABLE}"
             "${CMAKE_CURRENT_SOURCE_DIR}/run_node.mjs" "${GENERATED}/Radient.mjs" "${SUITE}")
     add_test(NAME "Radient-JavaScript-Browser-${SUITE_NAME}"
-        COMMAND ${BINDING_COMMAND} "${BINDING_TOOLS}/javascript/tests/run_browser_tests.py"
+        COMMAND ${BROWSER_RUNNER} ${BINDING_COMMAND} "${BINDING_TOOLS}/javascript/tests/run_browser_tests.py"
             --module "${GENERATED}/Radient.mjs" --suite "${SUITE}" --shared-memory
             --test-data "${CMAKE_CURRENT_SOURCE_DIR}/../../tests/integration/fixtures.properties"
             --test-assets "${CMAKE_CURRENT_SOURCE_DIR}/../../tests/integration/assets")
