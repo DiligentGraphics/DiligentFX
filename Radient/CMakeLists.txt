@@ -13,6 +13,7 @@ set(SOURCE
     src/Animation/RadientSkeletonPoseImpl.cpp
     src/Assets/RadientAnimationClipAsset.cpp
     src/Assets/RadientAssetManagerImpl.cpp
+    src/Assets/RadientDefaultAssetResolver.cpp
     src/Assets/RadientAssetResolver.cpp
     src/Assets/RadientAssetValidation.cpp
     src/Assets/RadientCacheKeyBuilder.cpp

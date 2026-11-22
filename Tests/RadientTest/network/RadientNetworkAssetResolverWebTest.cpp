@@ -25,6 +25,7 @@
  */
 
 #include "RadientAssetResolver.h"
+#include "RadientEngine.h"
 #include "Assets/RadientAssetManagerImpl.hpp"
 #include "Assets/RadientMeshAssetManager.hpp"
 #include "Assets/RadientTextureAssetManager.hpp"
@@ -52,6 +53,8 @@ namespace
 class RadientNetworkAssetResolverWebTest : public ::testing::Test
 {
 protected:
+    void ImportDependencies(IRadientAssetResolver* SelectedResolver);
+
     void SetUp() override
     {
         char* Origin = RadientNetworkTestOrigin();
@@ -208,15 +211,17 @@ TEST_F(RadientNetworkAssetResolverWebTest, SupportsConcurrentTransfersAndRetaine
     });
 }
 
-TEST_F(RadientNetworkAssetResolverWebTest, ImportsGLTFAndGLBDependenciesAfterRedirect)
+void RadientNetworkAssetResolverWebTest::ImportDependencies(IRadientAssetResolver* SelectedResolver)
 {
     OnWorker([&] {
-        PoolScope                           Work;
-        RadientAssetManagerImpl::CreateInfo Info;
+        PoolScope               Work;
+        RadientEngineCreateInfo Info;
         Info.pThreadPool           = Work.Pool;
-        Info.Assets.pAssetResolver = Resolver;
-        auto Manager               = RadientAssetManagerImpl::Create(Info);
-        ASSERT_NE(Manager, nullptr);
+        Info.Assets.pAssetResolver = SelectedResolver;
+        RefCntAutoPtr<IRadientEngine> Engine;
+        ASSERT_EQ(CreateRadientEngine(Info, &Engine), RADIENT_STATUS_OK);
+        RefCntAutoPtr<IRadientAssetManager> Manager;
+        ASSERT_EQ(Engine->GetAssetManager(&Manager), RADIENT_STATUS_OK);
         for (const auto& Item : {std::make_pair("/entry.gltf", "/model/scene.gltf"), std::make_pair("/entry.glb", "/model/123")})
         {
             SCOPED_TRACE(Item.first);
@@ -228,7 +233,7 @@ TEST_F(RadientNetworkAssetResolverWebTest, ImportsGLTFAndGLBDependenciesAfterRed
             ASSERT_TRUE(Status == RADIENT_STATUS_OK || Status == RADIENT_STATUS_PENDING);
             ASSERT_EQ(WaitForAssetLoad(Scene, *Work.Pool), RADIENT_STATUS_OK);
             Work.Pool->WaitForAllTasks();
-            const auto* Imported = Manager->GetImportedScene(Scene);
+            const auto* Imported = RadientAssetManagerImpl::GetImportedScene(Scene);
             ASSERT_NE(Imported, nullptr);
             ASSERT_EQ(Imported->Meshes.size(), 1u);
             ASSERT_EQ(Imported->Textures.size(), 1u);
@@ -239,6 +244,16 @@ TEST_F(RadientNetworkAssetResolverWebTest, ImportsGLTFAndGLBDependenciesAfterRed
         }
         Manager->Stop(nullptr);
     });
+}
+
+TEST_F(RadientNetworkAssetResolverWebTest, ImportsGLTFAndGLBDependenciesAfterRedirect)
+{
+    ImportDependencies(Resolver);
+}
+
+TEST_F(RadientNetworkAssetResolverWebTest, DefaultEngineImportsNetworkDependencies)
+{
+    ImportDependencies(nullptr);
 }
 
 TEST_F(RadientNetworkAssetResolverWebTest, StopDuringRequestRemainsTimeoutBounded)

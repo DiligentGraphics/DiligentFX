@@ -34,6 +34,8 @@
 #endif
 
 #include "RadientAssetResolver.h"
+#include "RadientEngine.h"
+#include "Assets/RadientAssetResolver.hpp"
 #include "Assets/RadientAssetManagerImpl.hpp"
 #include "RadientImportedDocument.hpp"
 #include "RadientAssetTestHelpers.hpp"
@@ -113,6 +115,8 @@ std::string MakeGLB(std::string JSON)
 class RadientNetworkAssetResolverTest : public ::testing::Test
 {
 protected:
+    void ImportDependencies(IRadientAssetResolver* SelectedResolver);
+
     void SetUp() override
     {
 #if PLATFORM_ANDROID && !RADIENT_ANDROID_NETWORK_TEST
@@ -604,7 +608,7 @@ TEST_F(RadientNetworkAssetResolverTest, SupportsConcurrentTransfers)
     EXPECT_EQ(Requests.load(), 8u);
 }
 
-TEST_F(RadientNetworkAssetResolverTest, ImportsGLTFDependenciesAfterRedirect)
+void RadientNetworkAssetResolverTest::ImportDependencies(IRadientAssetResolver* SelectedResolver)
 {
     struct PoolScope
     {
@@ -615,11 +619,13 @@ TEST_F(RadientNetworkAssetResolverTest, ImportsGLTFDependenciesAfterRedirect)
             Pool->StopThreads();
         }
     } Work;
-    RadientAssetManagerImpl::CreateInfo Info;
+    RadientEngineCreateInfo Info;
     Info.pThreadPool           = Work.Pool;
-    Info.Assets.pAssetResolver = Resolver;
-    auto Manager               = RadientAssetManagerImpl::Create(Info);
-    ASSERT_NE(Manager, nullptr);
+    Info.Assets.pAssetResolver = SelectedResolver;
+    RefCntAutoPtr<IRadientEngine> Engine;
+    ASSERT_EQ(CreateRadientEngine(Info, &Engine), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientAssetManager> Manager;
+    ASSERT_EQ(Engine->GetAssetManager(&Manager), RADIENT_STATUS_OK);
     const struct
     {
         const char* Entry;
@@ -640,7 +646,7 @@ TEST_F(RadientNetworkAssetResolverTest, ImportsGLTFDependenciesAfterRedirect)
         ASSERT_TRUE(Status == RADIENT_STATUS_OK || Status == RADIENT_STATUS_PENDING);
         ASSERT_EQ(WaitForAssetLoad(Scene, *Work.Pool), RADIENT_STATUS_OK);
         Work.Pool->WaitForAllTasks();
-        const auto* Imported = Manager->GetImportedScene(Scene);
+        const auto* Imported = RadientAssetManagerImpl::GetImportedScene(Scene);
         ASSERT_NE(Imported, nullptr);
         ASSERT_EQ(Imported->Meshes.size(), 1u);
         ASSERT_EQ(Imported->Textures.size(), 1u);
@@ -652,5 +658,27 @@ TEST_F(RadientNetworkAssetResolverTest, ImportsGLTFDependenciesAfterRedirect)
     }
     Manager->Stop(nullptr);
 }
+
+TEST_F(RadientNetworkAssetResolverTest, ImportsGLTFDependenciesAfterRedirect)
+{
+    ImportDependencies(Resolver);
+}
+
+#if PLATFORM_ANDROID
+TEST_F(RadientNetworkAssetResolverTest, DefaultEngineDoesNotRequireJavaVM)
+{
+    RefCntAutoPtr<IRadientEngine> Engine;
+    ASSERT_EQ(CreateRadientEngine({}, &Engine), RADIENT_STATUS_OK);
+    auto                                 DefaultResolver = CreateDefaultRadientAssetResolver();
+    RefCntAutoPtr<IRadientAssetLocation> Location;
+    EXPECT_EQ(DefaultResolver->ResolveAssetLocation({"asset.bin"}, &Location), RADIENT_STATUS_OK);
+    EXPECT_EQ(DefaultResolver->ResolveAssetLocation({"https://example.test/asset.bin"}, &Location), RADIENT_STATUS_UNSUPPORTED);
+}
+#else
+TEST_F(RadientNetworkAssetResolverTest, DefaultEngineImportsNetworkDependencies)
+{
+    ImportDependencies(nullptr);
+}
+#endif
 
 } // namespace

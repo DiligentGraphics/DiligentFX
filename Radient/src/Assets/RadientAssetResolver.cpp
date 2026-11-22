@@ -89,13 +89,6 @@ RADIENT_STATUS CreateRadientFilesystemAssetResolver(const RadientFilesystemAsset
     }
 }
 
-// Creates the built-in resolver for filesystem paths and file:// URIs.
-RefCntAutoPtr<IRadientAssetResolver> CreateDefaultRadientAssetResolver()
-{
-    return RefCntAutoPtr<RadientFilesystemAssetResolver>{
-        MakeNewRCObj<RadientFilesystemAssetResolver>()()};
-}
-
 // Preserve a user resolver when supplied, otherwise provide the built-in resolver.
 RefCntAutoPtr<IRadientAssetResolver> GetRadientAssetResolverOrDefault(IRadientAssetResolver* pResolver)
 {

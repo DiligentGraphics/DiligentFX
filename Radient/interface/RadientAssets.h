@@ -184,7 +184,13 @@ struct RadientAssetManagerCreateInfo
     RadientAssetManagerDesc Desc DEFAULT_INITIALIZER({});
 
     /// Optional asset resolver used to obtain bytes for URI-backed assets.
-    /// If null, Radient uses a default filesystem resolver.
+    /// If null, Radient routes HTTP/HTTPS URIs to the network resolver and paths
+    /// or file: URIs to the filesystem resolver. Relative references follow BaseURI.
+    /// Absolute filesystem paths, Windows drives, and UNC paths take precedence
+    /// over BaseURI. Other explicit schemes return UNSUPPORTED.
+    /// On Android, the default resolver supports filesystem loading only; network
+    /// requests return UNSUPPORTED. Supply a network resolver with a JVM to enable HTTP.
+    /// A supplied resolver receives requests directly, without automatic routing.
     IRadientAssetResolver* pAssetResolver DEFAULT_INITIALIZER(nullptr);
 };
 typedef struct RadientAssetManagerCreateInfo RadientAssetManagerCreateInfo;

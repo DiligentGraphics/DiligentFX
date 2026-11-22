@@ -324,7 +324,8 @@ TEST(RadientAssetResolverTest, PreservesPercentEscapesInDependencyPaths)
         EXPECT_EQ(Data->GetSize(), 4u);
     }
     RefCntAutoPtr<IRadientAssetLocation> Location;
-    EXPECT_EQ(Resolver->ResolveAssetLocation({"https://example.com/image.png", Base.c_str()}, &Location), RADIENT_STATUS_INVALID_ARGUMENT);
+    ASSERT_EQ(Resolver->ResolveAssetLocation({"https://example.com/image.png", Base.c_str()}, &Location), RADIENT_STATUS_OK);
+    EXPECT_STREQ(Location->GetLocation(), "https://example.com/image.png");
 }
 
 TEST(RadientAssetDataTest, AdoptsAllocationWithoutCopyAndReleasesItOnce)
@@ -371,4 +372,117 @@ TEST(RadientAssetDataTest, PreservesVectorOwnershipWithoutCopy)
     EXPECT_EQ(Data->GetData(), Original);
     EXPECT_EQ(Data->GetSize(), 3u);
     EXPECT_EQ(static_cast<const Uint8*>(Data->GetData())[2], 3u);
+}
+
+
+TEST(RadientAssetResolverTest, DefaultRoutesFilesystemPaths)
+{
+    auto Resolver = CreateDefaultRadientAssetResolver();
+    const struct
+    {
+        const char* URI;
+        const char* Base;
+        const char* Expected;
+    } Cases[] = {
+        {"asset.bin", nullptr, "asset.bin"},
+        {"../asset%20+red.bin", "assets/scenes/model.gltf", "assets/asset%20+red.bin"},
+        {"asset.bin", "file://assets/model.gltf", "assets/asset.bin"},
+        {"asset.bin", "FILE://assets/model.gltf", "assets/asset.bin"},
+        {"file://assets/asset.bin", nullptr, "assets/asset.bin"},
+        {"file:///local/asset.bin", "assets/model.gltf", "/local/asset.bin"},
+        {"FILE://C:/assets/asset.bin", "assets/model.gltf", "C:/assets/asset.bin"},
+        {"FiLe:assets/asset.bin", "https://host/model.gltf", "assets/asset.bin"},
+        {"/local/asset.bin", "https://host/model.gltf", "/local/asset.bin"},
+        {"C:/assets/asset.bin", "https://host/model.gltf", "C:/assets/asset.bin"},
+        {"c:asset.bin", "https://host/model.gltf", "c:asset.bin"},
+        {R"(C:\assets\asset.bin)", "https://host/model.gltf", R"(C:\assets\asset.bin)"},
+        {R"(\\server\share\asset.bin)", "https://host/model.gltf", R"(\\server\share\asset.bin)"},
+        {"//server/share/asset.bin", "https://host/model.gltf", "//server/share/asset.bin"},
+        {"/local/asset.bin", "package:scene", "/local/asset.bin"},
+    };
+    for (const auto& Item : Cases)
+    {
+        SCOPED_TRACE(Item.URI);
+        RefCntAutoPtr<IRadientAssetLocation> Location;
+        ASSERT_EQ(Resolver->ResolveAssetLocation({Item.URI, Item.Base}, &Location), RADIENT_STATUS_OK);
+        EXPECT_EQ(Location->GetLocation(), FileSystem::SimplifyPath(Item.Expected));
+    }
+}
+
+TEST(RadientAssetResolverTest, DefaultRoutesURLsAndRelativeDependencies)
+{
+    auto Resolver = CreateDefaultRadientAssetResolver();
+    const struct
+    {
+        const char* URI;
+        const char* Base;
+        const char* Expected;
+    } Cases[] = {
+        {"https://host/model.gltf", nullptr, "https://host/model.gltf"},
+        {"HTTP://host/model.gltf", "file://local/model.gltf", "http://host/model.gltf"},
+        {"https://host/model.gltf", "custom:scene", "https://host/model.gltf"},
+        {"../mesh.bin", "https://host/assets/model.gltf", "https://host/mesh.bin"},
+        {"image%23red.png", "http://host/assets/model.gltf", "http://host/assets/image%23red.png"},
+        {"?variant=mesh:main", "https://host/assets/model.gltf", "https://host/assets/model.gltf?variant=mesh:main"},
+        {"#scene:1", "https://host/assets/model.gltf", "https://host/assets/model.gltf"},
+    };
+    for (const auto& Item : Cases)
+    {
+        SCOPED_TRACE(Item.URI);
+        RefCntAutoPtr<IRadientAssetLocation> Location;
+        ASSERT_EQ(Resolver->ResolveAssetLocation({Item.URI, Item.Base}, &Location), RADIENT_STATUS_OK);
+        EXPECT_STREQ(Location->GetLocation(), Item.Expected);
+    }
+    for (const auto& Item : {RadientAssetResolveInfo{"ftp://host/file", "https://host/model"},
+                             RadientAssetResolveInfo{"package:asset", nullptr},
+                             RadientAssetResolveInfo{"asset.bin", "package:scene"}})
+    {
+        RefCntAutoPtr<IRadientAssetLocation> Location;
+        EXPECT_EQ(Resolver->ResolveAssetLocation(Item, &Location), RADIENT_STATUS_UNSUPPORTED);
+        EXPECT_EQ(Location, nullptr);
+    }
+    RefCntAutoPtr<IRadientAssetLocation> Location;
+    EXPECT_EQ(Resolver->ResolveAssetLocation({nullptr}, &Location), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(Resolver->ResolveAssetLocation({""}, &Location), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(Resolver->ResolveAssetLocation({"file"}, nullptr), RADIENT_STATUS_INVALID_ARGUMENT);
+}
+
+TEST(RadientAssetResolverTest, DefaultLocationRetainsBackendAndRejectsForeignLocations)
+{
+    TempDirectory Temp{"RadientDefaultResolver"};
+    const auto    Path = Temp.Get() + "/asset.bin";
+    {
+        std::ofstream File{Path, std::ios::binary};
+        File << "data";
+    }
+    auto                                 Resolver = CreateDefaultRadientAssetResolver();
+    RefCntAutoPtr<IRadientAssetLocation> Location;
+    ASSERT_EQ(Resolver->ResolveAssetLocation({Path.c_str()}, &Location), RADIENT_STATUS_OK);
+    Resolver.Release();
+    Resolver = CreateDefaultRadientAssetResolver();
+    ASSERT_EQ(Resolver->CheckAsset(Location), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientAssetData> Data;
+    ASSERT_EQ(Resolver->OpenAsset(Location, &Data), RADIENT_STATUS_OK);
+    EXPECT_EQ(Data->GetSize(), 4u);
+    RefCntAutoPtr<IRadientAssetResolver> Filesystem;
+    ASSERT_EQ(CreateRadientFilesystemAssetResolver({}, &Filesystem), RADIENT_STATUS_OK);
+    RefCntAutoPtr<IRadientAssetLocation> Foreign;
+    ASSERT_EQ(Filesystem->ResolveAssetLocation({Path.c_str()}, &Foreign), RADIENT_STATUS_OK);
+    Data.Release();
+    EXPECT_EQ(Resolver->OpenAsset(Foreign, &Data), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(Data, nullptr);
+    EXPECT_EQ(Resolver->CheckAsset(Foreign), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(Resolver->CheckAsset(nullptr), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(Resolver->OpenAsset(nullptr, &Data), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(Resolver->OpenAsset(Location, nullptr), RADIENT_STATUS_INVALID_ARGUMENT);
+}
+
+TEST(RadientAssetResolverTest, SuppliedResolverBypassesDefaultRouting)
+{
+    RefCntAutoPtr<IRadientAssetResolver> Filesystem;
+    ASSERT_EQ(CreateRadientFilesystemAssetResolver({}, &Filesystem), RADIENT_STATUS_OK);
+    auto Selected = GetRadientAssetResolverOrDefault(Filesystem);
+    EXPECT_EQ(Selected, Filesystem);
+    RefCntAutoPtr<IRadientAssetLocation> Location;
+    EXPECT_EQ(Selected->ResolveAssetLocation({"https://host/file"}, &Location), RADIENT_STATUS_INVALID_ARGUMENT);
 }

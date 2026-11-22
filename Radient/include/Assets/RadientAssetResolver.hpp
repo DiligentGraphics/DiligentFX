@@ -32,11 +32,12 @@
 namespace Diligent
 {
 
-/// Creates the default file-based asset resolver.
+/// Creates the default filesystem/HTTP asset resolver. Android defaults to
+/// filesystem loading; HTTP requires an explicit resolver with a JVM.
 RefCntAutoPtr<IRadientAssetResolver> CreateDefaultRadientAssetResolver();
 
 /// Returns pResolver when it is not null. Otherwise, creates and returns the
-/// default file-based asset resolver.
+/// default filesystem/HTTP asset resolver.
 RefCntAutoPtr<IRadientAssetResolver> GetRadientAssetResolverOrDefault(IRadientAssetResolver* pResolver);
 
 } // namespace Diligent

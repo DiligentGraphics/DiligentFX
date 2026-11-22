@@ -71,9 +71,14 @@ distinct material assets.
 ## Asset resolvers
 
 Asset resolvers locate assets and provide their bytes. Leaving
-`RadientEngineCreateInfo::Assets.pAssetResolver` null uses the default filesystem
-resolver. Network requests require an explicitly supplied network resolver;
-automatic routing between filesystem and network resources is not implemented yet.
+`RadientEngineCreateInfo::Assets.pAssetResolver` null uses the default routing
+resolver. HTTP/HTTPS URLs and relative references with HTTP/HTTPS bases select
+network loading. Local paths and `file:` URIs select filesystem loading. Absolute
+paths, including Windows drive and UNC paths, select the filesystem even with a
+network base; use an absolute HTTP/HTTPS URL for a server-root network reference.
+Unsupported schemes return `UNSUPPORTED`. Routing does not decode percent escapes.
+On Android, the default resolver supports local files; network requests return
+`UNSUPPORTED` until an explicit network resolver with a JVM is supplied.
 
 To configure resolution explicitly, create a resolver with
 `CreateRadientFilesystemAssetResolver` or `CreateRadientNetworkAssetResolver`,
