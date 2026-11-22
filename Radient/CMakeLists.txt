@@ -186,6 +186,12 @@ set(INTERFACE
     interface/RadientView.h
 )
 
+if(PLATFORM_WEB)
+    list(APPEND SOURCE src/Assets/RadientNetworkAssetResolverWeb.cpp)
+else()
+    list(APPEND SOURCE src/Assets/RadientNetworkAssetResolverNative.cpp)
+endif()
+
 set(RADIENT_SOURCE ${SOURCE} ${INCLUDE} ${INTERFACE} readme.md)
 add_library(Radient STATIC ${RADIENT_SOURCE})
 
@@ -229,4 +235,10 @@ option(RADIENT_GENERATE_BINDINGS "Enable Radient binding generation and tests" O
 option(RADIENT_BUILD_JAVA_BINDINGS "Build Radient Java/JNI bindings and integration tests" OFF)
 if(RADIENT_GENERATE_BINDINGS OR RADIENT_BUILD_JAVA_BINDINGS)
     add_subdirectory(bindings)
+endif()
+
+if(NOT PLATFORM_WEB)
+    include(cmake/RadientCurl.cmake)
+    radient_fetch_curl()
+    target_link_libraries(Radient PRIVATE libcurl_static ZLIB::ZLIB)
 endif()

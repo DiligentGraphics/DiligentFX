@@ -66,6 +66,26 @@ struct RadientFilesystemAssetResolverCreateInfo
 };
 typedef struct RadientFilesystemAssetResolverCreateInfo RadientFilesystemAssetResolverCreateInfo;
 
+/// Configuration of the built-in HTTP/HTTPS resolver.
+/// With curl's threaded DNS resolver, cleanup may wait for an OS DNS lookup
+/// to finish after either timeout expires. These values do not impose a strict
+/// deadline on CheckAsset, OpenAsset, or asset-manager shutdown.
+struct RadientNetworkAssetResolverCreateInfo
+{
+    /// Connection timeout in milliseconds, including DNS lookup and TLS handshake.
+    /// Must be nonzero and no greater than INT32_MAX.
+    Uint32 ConnectTimeoutMs DEFAULT_INITIALIZER(10000);
+
+    /// Timeout for the network transfer, including redirects, in milliseconds.
+    /// Must be nonzero and no greater than INT32_MAX.
+    Uint32 RequestTimeoutMs DEFAULT_INITIALIZER(60000);
+
+    /// Maximum number of HTTP redirects to follow, no greater than INT32_MAX.
+    /// Zero disables redirects.
+    Uint32 MaxRedirects DEFAULT_INITIALIZER(10);
+};
+typedef struct RadientNetworkAssetResolverCreateInfo RadientNetworkAssetResolverCreateInfo;
+
 // {61A897A7-0EF4-4F5F-B769-406DA98B3B5A}
 static DILIGENT_CONSTEXPR INTERFACE_ID IID_RadientAssetLocation =
     {0x61a897a7, 0xef4, 0x4f5f, {0xb7, 0x69, 0x40, 0x6d, 0xa9, 0x8b, 0x3b, 0x5a}};
@@ -126,8 +146,10 @@ DILIGENT_BEGIN_INTERFACE(IRadientAssetData, IObject)
     /// Returns the size of the resolved asset data, in bytes.
     VIRTUAL size_t METHOD(GetSize)(THIS) CONST PURE;
 
-    /// Returns the canonical resolved URI used for cache keys and diagnostics.
-    /// The returned string is never null and matches the location passed to OpenAsset().
+    /// Returns the final resolved URI used for dependency resolution and diagnostics.
+    /// The returned string is never null. It may differ from the location passed to
+    /// OpenAsset() after a redirect. Use it as BaseURI for dependencies; the original
+    /// location remains unchanged and identifies the request for caching.
     VIRTUAL const Char* METHOD(GetResolvedURI)(THIS) CONST PURE;
 };
 DILIGENT_END_INTERFACE
@@ -175,7 +197,7 @@ DILIGENT_BEGIN_INTERFACE(IRadientAssetResolver, IObject)
                                                         IRadientAssetLocation**           ppLocation) PURE;
 
     /// Opens an asset location returned by this resolver. ppData must not be null.
-    /// On success, the resolved URI reported by ppData matches pLocation.
+    /// On success, ppData reports the final resolved URI, including any redirects.
     VIRTUAL RADIENT_STATUS METHOD(OpenAsset)(THIS_
                                              IRadientAssetLocation* pLocation,
                                              IRadientAssetData**    ppData) PURE;
@@ -201,6 +223,25 @@ DILIGENT_END_INTERFACE
 RADIENT_STATUS DILIGENT_GLOBAL_FUNCTION(CreateRadientFilesystemAssetResolver)(
     const RadientFilesystemAssetResolverCreateInfo REF CreateInfo,
     IRadientAssetResolver**                            ppResolver);
+
+/// Creates a network resolver for HTTP/HTTPS URLs and relative URL references.
+/// ResolveAssetLocation performs URL resolution without network I/O and removes
+/// fragments. CheckAsset uses HTTP HEAD; servers that reject HEAD return FAILED.
+/// OpenAsset downloads the complete resource and follows up to MaxRedirects redirects.
+/// HTTP 404/410 return NOT_FOUND; transport errors, timeouts, other unsuccessful HTTP
+/// responses, and incomplete transfers return FAILED. Partial data is never published.
+/// TLS certificate and hostname verification use the configured native trust store.
+/// Calls are synchronous and may run concurrently, using independent transfers.
+/// The resolver interface has no cancellation token: stopping an asset manager does
+/// not interrupt an active transfer. Timeouts limit the network transfer, but curl's
+/// threaded DNS cleanup may still wait for an outstanding OS lookup before returning.
+/// CheckAsset, OpenAsset, and shutdown waits can therefore exceed both timeouts.
+/// Gzip and deflate responses are decoded before publication. Invalid or unsupported
+/// content encodings return FAILED without publishing partial data.
+/// The browser transport is not implemented yet; Web builds currently return UNSUPPORTED.
+RADIENT_STATUS DILIGENT_GLOBAL_FUNCTION(CreateRadientNetworkAssetResolver)(
+    const RadientNetworkAssetResolverCreateInfo REF CreateInfo,
+    IRadientAssetResolver**                         ppResolver);
 
 /// Resolves ResolveInfo and checks whether the resulting asset location can be opened.
 RADIENT_STATUS DILIGENT_GLOBAL_FUNCTION(CheckAsset)(IRadientAssetResolver*            pResolver,

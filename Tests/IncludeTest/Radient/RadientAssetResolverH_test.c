@@ -43,6 +43,7 @@ void RadientAssetResolver_C_TestMacros(IRadientAssetResolver* pAssetResolver,
                                        IRadientAssetLocation* pLocation,
                                        IRadientAssetData*     pAssetData)
 {
+    RadientNetworkAssetResolverCreateInfo    NetworkInfo = {10000, 60000, 10};
     RadientFilesystemAssetResolverCreateInfo CreateInfo  = {0};
     RadientAssetResolveInfo                  ResolveInfo = {0};
     const char*                              LocationURI = IRadientAssetLocation_GetLocation(pLocation);
@@ -55,6 +56,7 @@ void RadientAssetResolver_C_TestMacros(IRadientAssetResolver* pAssetResolver,
     Status = IRadientAssetResolver_CheckAsset(pAssetResolver, pLocation);
     Status = IRadientAssetResolver_OpenAsset(pAssetResolver, pLocation, &pAssetData);
     Status = Diligent_CreateRadientFilesystemAssetResolver(&CreateInfo, &pAssetResolver);
+    Status = Diligent_CreateRadientNetworkAssetResolver(&NetworkInfo, &pAssetResolver);
     Status = Diligent_CheckAsset(pAssetResolver, &ResolveInfo);
     Status = Diligent_OpenAsset(pAssetResolver, &ResolveInfo, &pAssetData);
 

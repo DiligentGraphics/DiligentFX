@@ -1,7 +1,8 @@
 # Radient Documentation
 
-This folder contains design and usage notes for Radient.
+This folder contains build, design, and usage notes for Radient.
 
+- [Building Radient](Building.md)
 - [Camera Conventions](CameraConventions.md)
 - [Light Conventions](LightConventions.md)
 - [Vertex Layouts](VertexLayouts.md)

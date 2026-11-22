@@ -67,3 +67,52 @@ instantiation with an animation registry creates material bindings automatically
 Materials remain shared between scene instances: evaluating a material binding
 affects every instance that uses that asset. Independent playback requires
 distinct material assets.
+
+## Asset resolvers
+
+Asset resolvers locate assets and provide their bytes. Leaving
+`RadientEngineCreateInfo::Assets.pAssetResolver` null uses the default filesystem
+resolver. Network requests require an explicitly supplied network resolver;
+automatic routing between filesystem and network resources is not implemented yet.
+
+To configure resolution explicitly, create a resolver with
+`CreateRadientFilesystemAssetResolver` or `CreateRadientNetworkAssetResolver`,
+then assign it to `RadientEngineCreateInfo::Assets.pAssetResolver` before calling
+`CreateRadientEngine`. When creating an asset manager directly, use
+`RadientAssetManagerCreateInfo::pAssetResolver`. The engine retains the supplied
+resolver, which receives requests for all assets and their dependencies.
+
+The filesystem factory accepts an optional `BaseDirectory` for relative requests
+without `BaseURI`. A supplied directory is captured as an absolute path at
+creation time; it does not restrict access to that directory. With no directory,
+relative requests use the working directory. On the Web, filesystem paths refer
+to the virtual filesystem.
+
+The network resolver accepts HTTP/HTTPS URLs and relative URL references with an
+HTTP/HTTPS `BaseURI`. The network factory accepts `ConnectTimeoutMs`,
+`RequestTimeoutMs`, and `MaxRedirects`. Connection and network-transfer timeouts
+default to 10 and 60 seconds. Stopping an asset manager does not interrupt an
+active transfer. With the curl backend, cleanup may wait for an outstanding OS
+DNS lookup even after a timeout. Consequently, `CheckAsset`, `OpenAsset`, and
+shutdown waits can exceed both configured timeouts; they are not strict
+return-time guarantees. HTTPS verifies server certificates and hostnames.
+
+For custom storage, implement `IRadientAssetResolver`; its methods must support
+concurrent calls. `ResolveAssetLocation` produces an identity without loading
+contents, `CheckAsset` checks availability, and `OpenAsset` returns asset data.
+The built-in network resolver checks availability with HTTP HEAD, so servers
+must support HEAD to use `CheckAsset`.
+
+When resolving dependencies, supply the dependency reference in `URI` and the
+referring asset's `IRadientAssetData::GetResolvedURI()` in `BaseURI`. The base is
+the referring asset's full identity, not just its directory. This also resolves
+dependencies relative to the final location after a redirect. Built-in importers
+pass this context automatically; custom resolvers define how to interpret it.
+
+The browser network transport is not implemented yet;
+`CreateRadientNetworkAssetResolver` returns `RADIENT_STATUS_UNSUPPORTED` on the
+Web. See [RadientAssetResolver.h](interface/RadientAssetResolver.h) for the
+complete resolver contract and failure statuses.
+
+For source-build prerequisites and offline configuration, see
+[Building Radient](docs/Building.md).

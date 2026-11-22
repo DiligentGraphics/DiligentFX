@@ -110,6 +110,13 @@ RefCntAutoPtr<IRadientAssetResolver> GetRadientAssetResolverOrDefault(IRadientAs
 extern "C"
 {
 
+    Diligent::RADIENT_STATUS Diligent_CreateRadientNetworkAssetResolver(
+        const Diligent::RadientNetworkAssetResolverCreateInfo& Info,
+        Diligent::IRadientAssetResolver**                      Resolver)
+    {
+        return Diligent::CreateRadientNetworkAssetResolver(Info, Resolver);
+    }
+
     Diligent::RADIENT_STATUS Diligent_CreateRadientFilesystemAssetResolver(
         const Diligent::RadientFilesystemAssetResolverCreateInfo& CreateInfo,
         Diligent::IRadientAssetResolver**                         ppResolver)

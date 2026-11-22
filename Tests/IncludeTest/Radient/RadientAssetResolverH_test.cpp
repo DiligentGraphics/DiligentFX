@@ -49,6 +49,9 @@ void RadientAssetResolver_CPP_UseTypes()
         Status = OpenAsset(pAssetResolver, ResolveInfo, &pAssetData);
     }
 
+    RadientNetworkAssetResolverCreateInfo NetworkInfo;
+    Status = CreateRadientNetworkAssetResolver(NetworkInfo, &pAssetResolver);
+
     (void)ResolveInfo;
     (void)pAssetResolver;
     (void)pLocation;

@@ -47,3 +47,13 @@ set_target_properties(RadientTest
 set_target_properties(RadientTest PROPERTIES
     FOLDER "DiligentFX/Tests"
 )
+
+if(WIN32 AND ARCH EQUAL 32)
+    # cpp-httplib explicitly does not support 32-bit Windows.
+    message(STATUS "Skipping Radient HTTP-server tests: cpp-httplib does not support 32-bit Windows")
+elseif(NOT PLATFORM_WEB)
+    # Keep the test server and its optional dependencies out of production builds.
+    include(network/HttpServer.cmake)
+    target_sources(RadientTest PRIVATE network/RadientNetworkAssetResolverTest.cpp)
+    target_link_libraries(RadientTest PRIVATE httplib::httplib ZLIB::ZLIB)
+endif()
