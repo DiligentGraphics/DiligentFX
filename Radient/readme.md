@@ -102,6 +102,17 @@ for response data; receiving data restarts this timeout. `RequestTimeoutMs` stil
 bounds the entire request. Apple's networking policies and compressed-response
 validation apply.
 
+On Android, supply `RadientNetworkAssetResolverCreateInfo::pJavaVM` before creating
+the resolver (for NativeActivity, use `activity->vm`). The resolver borrows this
+pointer; the JVM must outlive it and all active calls. Java bindings supply the VM
+automatically. Pass the resulting resolver through the engine's existing
+`Assets.pAssetResolver` field. Network calls must run off the Android UI thread.
+Android's network security configuration applies, and the app needs the
+`android.permission.INTERNET` manifest permission. `ConnectTimeoutMs` limits TCP
+establishment only. TLS negotiation uses the read timeout derived from the remaining
+`RequestTimeoutMs` budget. The request deadline is checked between blocking HTTP
+operations; DNS lookup and cleanup can exceed that deadline.
+
 For custom storage, implement `IRadientAssetResolver`; its methods must support
 concurrent calls. `ResolveAssetLocation` produces an identity without loading
 contents, `CheckAsset` checks availability, and `OpenAsset` returns asset data.

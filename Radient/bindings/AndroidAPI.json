@@ -1,0 +1,17 @@
+{
+  "extends": "API.json",
+  "declarations": {
+    "_JavaVM": {
+      "binding": "external",
+      "reason": "Android's JVM is an opaque native dependency, supplied by the JNI adapter."
+    },
+    "Diligent::RadientNetworkAssetResolverCreateInfo": {
+      "fields": {
+        "pJavaVM": {
+          "binding": "manual",
+          "reason": "The Java backend injects its calling JVM; native callers provide their own VM."
+        }
+      }
+    }
+  }
+}

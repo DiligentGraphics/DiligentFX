@@ -6,7 +6,7 @@ instructions with Radient-specific prerequisites.
 
 ## Native prerequisites
 
-On native platforms other than desktop Windows and Apple, including UWP, install OpenSSL
+On native platforms other than desktop Windows, Apple, and Android, including UWP, install OpenSSL
 development headers and libraries (for example, `libssl-dev` on Ubuntu). Set
 `OPENSSL_ROOT_DIR` if CMake cannot find them automatically. Cross builds require OpenSSL libraries built for
 the target platform, rather than the host. HTTPS also requires an appropriate
@@ -19,6 +19,10 @@ Apple platforms use Foundation's NSURLSession for HTTP(S), TLS, and certificate
 verification; curl and OpenSSL are not required. Applications must allow network
 access through their sandbox entitlements and App Transport Security configuration.
 The resolver does not override those policies.
+Android uses the platform Java HTTP/TLS implementation through JNI and requires
+neither curl nor OpenSSL. Applications need the `android.permission.INTERNET`
+manifest permission; Android's network security configuration controls cleartext
+HTTP and certificate trust. No additional Java helper class is required.
 Web builds do not require native HTTP or TLS libraries. The browser network
 transport is not implemented yet in this branch.
 

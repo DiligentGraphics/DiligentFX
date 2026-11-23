@@ -28,6 +28,8 @@
       "Diligent::RADIENT_MAX_ACTIVE_MORPH_TARGET_COUNT",
       "Diligent::RadientFilesystemAssetResolverCreateInfo",
       "Diligent::CreateRadientFilesystemAssetResolver",
+      "Diligent::RadientNetworkAssetResolverCreateInfo",
+      "Diligent::CreateRadientNetworkAssetResolver",
       "Diligent::IRadientAssetResolver",
       "Diligent::IID_RadientAssetResolver"
     ]

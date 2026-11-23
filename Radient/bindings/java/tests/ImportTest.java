@@ -18,6 +18,26 @@ public final class ImportTest {
     }
 
     public static void main(String[] args) {
+        run("network resolver factory marshals configuration and engine ownership", () -> {
+            RadientNetworkAssetResolverCreateInfo info = new RadientNetworkAssetResolverCreateInfo();
+            equal(10000L, info.ConnectTimeoutMs);
+            equal(60000L, info.RequestTimeoutMs);
+            equal(10L, info.MaxRedirects);
+            var created = CreateRadientNetworkAssetResolver(info);
+            ok(created.returnValue);
+            try (var resolver = created.ppResolver) {
+                RadientEngineCreateInfo engineInfo = new RadientEngineCreateInfo();
+                engineInfo.Assets.pAssetResolver = resolver;
+                try (AssetFixture f = new AssetFixture(engineInfo)) {
+                    check(f.engine != null);
+                }
+            }
+            info.RequestTimeoutMs = 0;
+            var invalid = CreateRadientNetworkAssetResolver(info);
+            equal(RADIENT_STATUS_INVALID_ARGUMENT, invalid.returnValue);
+            check(invalid.ppResolver == null);
+        });
+
         run("GLB loading exposes clips and instantiates hierarchy, meshes, and animation bindings", () -> {
             try (AssetFixture f = new AssetFixture()) {
                 var loaded = f.manager.LoadScene(loadInfo("animated.glb"));

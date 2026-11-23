@@ -33,6 +33,10 @@
 
 #include "../../../DiligentCore/Primitives/interface/Object.h"
 
+#if PLATFORM_ANDROID
+#    include <jni.h>
+#endif
+
 DILIGENT_BEGIN_NAMESPACE(Diligent)
 
 typedef struct IRadientAssetLocation IRadientAssetLocation;
@@ -75,16 +79,27 @@ struct RadientNetworkAssetResolverCreateInfo
     /// Connection timeout in milliseconds, including DNS lookup and TLS handshake.
     /// On Apple platforms, this is NSURLSession's inactivity timeout: it also
     /// applies while waiting for response data and restarts when data arrives.
+    /// On Android, this limits TCP establishment only. TLS negotiation uses the
+    /// read timeout derived from the remaining RequestTimeoutMs budget; DNS lookup
+    /// is controlled by the platform and may outlast either timeout.
     /// Must be nonzero and no greater than INT32_MAX.
     Uint32 ConnectTimeoutMs DEFAULT_INITIALIZER(10000);
 
     /// Timeout for the network transfer, including redirects, in milliseconds.
+    /// On Android, the remaining budget supplies the TLS/read timeout and is
+    /// checked between blocking operations, rather than enforcing a hard deadline.
     /// Must be nonzero and no greater than INT32_MAX.
     Uint32 RequestTimeoutMs DEFAULT_INITIALIZER(60000);
 
     /// Maximum number of HTTP redirects to follow, no greater than INT32_MAX.
     /// Zero disables redirects.
     Uint32 MaxRedirects DEFAULT_INITIALIZER(10);
+
+#if PLATFORM_ANDROID
+    /// Required on Android. Borrowed JVM pointer; the VM must outlive the resolver
+    /// and all calls using it. Java bindings supply the calling JVM automatically.
+    JavaVM* pJavaVM DEFAULT_INITIALIZER(nullptr);
+#endif
 };
 typedef struct RadientNetworkAssetResolverCreateInfo RadientNetworkAssetResolverCreateInfo;
 
@@ -238,6 +253,9 @@ RADIENT_STATUS DILIGENT_GLOBAL_FUNCTION(CreateRadientFilesystemAssetResolver)(
 /// not interrupt an active transfer. Timeouts limit the network transfer, but curl's
 /// threaded DNS cleanup may still wait for an outstanding OS lookup before returning.
 /// CheckAsset, OpenAsset, and shutdown waits can therefore exceed both timeouts.
+/// On Android, the request deadline is checked between blocking Java HTTP operations;
+/// OS DNS lookup and connection cleanup may likewise outlast it. Calls must run off
+/// the Android UI thread. The supplied JVM must outlive the resolver and active calls.
 /// Gzip and deflate responses are decoded before publication. Unsupported encodings
 /// and reported decoding errors return FAILED without publishing partial data.
 /// On Apple platforms, NSURLSession determines whether a compressed response is valid;

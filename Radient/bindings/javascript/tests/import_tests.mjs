@@ -7,6 +7,12 @@ export const assetFiles = ["animated.glb", "obj/triangle.obj", "obj/triangle.mtl
 export function registerTests({test, assert, api, constants, testData}) {
     const {RADIENT_STATUS_OK: OK, RADIENT_STATUS_PENDING: PENDING, RADIENT_STATUS_UNSUPPORTED: UNSUPPORTED} = constants.RADIENT_STATUS;
 
+    test("network resolver factory reports the unavailable browser transport", () => {
+        const result = api.CreateRadientNetworkAssetResolver({});
+        assert.equal(result.status, UNSUPPORTED);
+        assert.equal(result.value, null);
+    });
+
     test("GLB loading exposes clips and instantiates hierarchy, meshes, and animation bindings", async t => {
         const f = createAssetFixture(t, api, assert, constants, testData);
         const asset = await f.ready(f.asset(f.manager.LoadScene({URI: "/assets/animated.glb"})));

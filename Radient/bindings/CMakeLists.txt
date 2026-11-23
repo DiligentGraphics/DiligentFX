@@ -88,6 +88,9 @@ endforeach()
 # The small extraction runs whenever requested, so edits to any transitive header
 # are picked up. The generator leaves unchanged output files untouched.
 set(BINDING_API "${CMAKE_CURRENT_SOURCE_DIR}/API.json")
+if(PLATFORM_ANDROID)
+    set(BINDING_API "${CMAKE_CURRENT_SOURCE_DIR}/AndroidAPI.json")
+endif()
 add_custom_target(Radient-GenerateBindingModel
     COMMAND ${BINDING_COMMAND} "${BINDING_TOOLS}/generate.py"
         --source-root "${FX_SOURCE_ROOT}"

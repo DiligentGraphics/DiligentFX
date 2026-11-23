@@ -92,6 +92,7 @@ set(INCLUDE
     include/Assets/RadientAssetManagerImpl.hpp
     include/Assets/RadientAssetResolver.hpp
     include/Assets/RadientNetworkAssetResolverCommon.hpp
+    include/Assets/RadientHTTPContent.hpp
     include/Assets/RadientAssetData.hpp
     include/Assets/RadientAssetURI.hpp
     include/Assets/RadientAssetValidation.hpp
@@ -189,6 +190,8 @@ set(INTERFACE
 
 if(PLATFORM_WEB)
     list(APPEND SOURCE src/Assets/RadientNetworkAssetResolverWeb.cpp)
+elseif(PLATFORM_ANDROID)
+    list(APPEND SOURCE src/Assets/RadientNetworkAssetResolverAndroid.cpp)
 elseif(PLATFORM_APPLE)
     list(APPEND SOURCE src/Assets/RadientNetworkAssetResolverApple.mm)
     # ARC owns Foundation objects captured by asynchronous completion callbacks.
@@ -245,6 +248,9 @@ endif()
 
 if(PLATFORM_APPLE)
     target_link_libraries(Radient PRIVATE "-framework Foundation")
+elseif(PLATFORM_ANDROID)
+    # Android supplies HTTP and TLS through java.net; only content decoding uses zlib.
+    target_link_libraries(Radient PRIVATE ZLIB::ZLIB)
 elseif(NOT PLATFORM_WEB)
     include(cmake/RadientCurl.cmake)
     radient_fetch_curl()

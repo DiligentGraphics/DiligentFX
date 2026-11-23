@@ -55,8 +55,22 @@
 using namespace Diligent;
 using namespace Diligent::Testing;
 
+#if RADIENT_ANDROID_NETWORK_TEST
+// Supplied by the JNI test entry point, never by production resolver code.
+JavaVM* GetNetworkTestJavaVM();
+#endif
+
 namespace
 {
+
+RadientNetworkAssetResolverCreateInfo NetworkCreateInfo()
+{
+    RadientNetworkAssetResolverCreateInfo Info;
+#if RADIENT_ANDROID_NETWORK_TEST
+    Info.pJavaVM = GetNetworkTestJavaVM();
+#endif
+    return Info;
+}
 
 std::string CompressHTTPData(const std::string& Data, int WindowBits = MAX_WBITS + 16)
 {
@@ -101,9 +115,15 @@ class RadientNetworkAssetResolverTest : public ::testing::Test
 protected:
     void SetUp() override
     {
+#if PLATFORM_ANDROID && !RADIENT_ANDROID_NETWORK_TEST
+        GTEST_SKIP() << "Run Android networking tests through the JVM test entry point";
+#endif
         Server.new_task_queue = [] {
             return new httplib::ThreadPool(4);
         };
+        // Idle platform-pooled connections must not occupy all four server
+        // workers while the concurrent-transfer test opens eight connections.
+        Server.set_keep_alive_max_count(1);
         AddResponseRoutes();
         AddCompressionRoutes();
         AddGLTFRoutes();
@@ -116,7 +136,7 @@ protected:
             }};
         Server.wait_until_ready();
         ASSERT_TRUE(Server.is_running());
-        RadientNetworkAssetResolverCreateInfo Info;
+        auto Info             = NetworkCreateInfo();
         Info.RequestTimeoutMs = 5000;
         ASSERT_EQ(CreateRadientNetworkAssetResolver(Info, &Resolver), RADIENT_STATUS_OK);
     }
@@ -333,6 +353,8 @@ TEST_F(RadientNetworkAssetResolverTest, ResolvesURLsWithoutIO)
     };
     const Case Cases[] = {
         {"../bytes", "/bytes"},
+        {"../../bytes", "/bytes"},
+        {"textures//image.png", "/models/textures//image.png"},
         {"/bytes#part", "/bytes"},
         {"?variant=mesh%3Amain", "/models/scene.gltf?variant=mesh%3Amain"},
         {"#node", "/models/scene.gltf?old=1"},
@@ -474,9 +496,14 @@ TEST_F(RadientNetworkAssetResolverTest, RejectsErrorsWithoutPublishingPartialDat
 TEST_F(RadientNetworkAssetResolverTest, ValidatesArgumentsAndLocationType)
 {
     EXPECT_EQ(CreateRadientNetworkAssetResolver({}, nullptr), RADIENT_STATUS_INVALID_ARGUMENT);
+#if RADIENT_ANDROID_NETWORK_TEST
+    RefCntAutoPtr<IRadientAssetResolver> MissingVM;
+    EXPECT_EQ(CreateRadientNetworkAssetResolver({}, &MissingVM), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_EQ(MissingVM, nullptr);
+#endif
     for (Uint32 Value : {0u, (std::numeric_limits<Uint32>::max)()})
     {
-        RadientNetworkAssetResolverCreateInfo Info;
+        auto Info             = NetworkCreateInfo();
         Info.RequestTimeoutMs = Value;
         RefCntAutoPtr<IRadientAssetResolver> Invalid;
         EXPECT_EQ(CreateRadientNetworkAssetResolver(Info, &Invalid), RADIENT_STATUS_INVALID_ARGUMENT);
@@ -501,9 +528,35 @@ TEST_F(RadientNetworkAssetResolverTest, ValidatesArgumentsAndLocationType)
     EXPECT_EQ(Resolver->OpenAsset(nullptr, nullptr), RADIENT_STATUS_INVALID_ARGUMENT);
 }
 
+#if RADIENT_ANDROID_NETWORK_TEST
+TEST_F(RadientNetworkAssetResolverTest, PreservesJavaThreadAttachmentAndClearsExceptions)
+{
+    JavaVM* VM  = GetNetworkTestJavaVM();
+    JNIEnv* Env = nullptr;
+    ASSERT_EQ(VM->GetEnv(reinterpret_cast<void**>(&Env), JNI_VERSION_1_6), JNI_OK);
+    RefCntAutoPtr<IRadientAssetLocation> Location;
+    EXPECT_EQ(Resolver->ResolveAssetLocation({"http://[invalid"}, &Location), RADIENT_STATUS_INVALID_ARGUMENT);
+    EXPECT_FALSE(Env->ExceptionCheck());
+    RefCntAutoPtr<IRadientAssetData> Data;
+    ASSERT_EQ(Open("/bytes", Data), RADIENT_STATUS_OK);
+    JNIEnv* After = nullptr;
+    EXPECT_EQ(VM->GetEnv(reinterpret_cast<void**>(&After), JNI_VERSION_1_6), JNI_OK);
+    EXPECT_EQ(After, Env);
+    auto Worker = std::async(std::launch::async, [this, VM] {
+        JNIEnv* WorkerEnv = nullptr;
+        if (VM->GetEnv(reinterpret_cast<void**>(&WorkerEnv), JNI_VERSION_1_6) != JNI_EDETACHED)
+            return false;
+        RefCntAutoPtr<IRadientAssetData> Bytes;
+        const bool                       Loaded = Open("/bytes", Bytes) == RADIENT_STATUS_OK;
+        return Loaded && VM->GetEnv(reinterpret_cast<void**>(&WorkerEnv), JNI_VERSION_1_6) == JNI_EDETACHED;
+    });
+    EXPECT_TRUE(Worker.get());
+}
+#endif
+
 TEST_F(RadientNetworkAssetResolverTest, TimesOutAndRecovers)
 {
-    RadientNetworkAssetResolverCreateInfo Info;
+    auto Info             = NetworkCreateInfo();
     Info.RequestTimeoutMs = 500;
     Resolver.Release();
     ASSERT_EQ(CreateRadientNetworkAssetResolver(Info, &Resolver), RADIENT_STATUS_OK);
@@ -524,7 +577,7 @@ TEST_F(RadientNetworkAssetResolverTest, EnforcesRedirectLimit)
     for (Uint32 Limit : {0u, 1u})
     {
         SCOPED_TRACE(Limit);
-        RadientNetworkAssetResolverCreateInfo Info;
+        auto Info         = NetworkCreateInfo();
         Info.MaxRedirects = Limit;
         Resolver.Release();
         ASSERT_EQ(CreateRadientNetworkAssetResolver(Info, &Resolver), RADIENT_STATUS_OK);

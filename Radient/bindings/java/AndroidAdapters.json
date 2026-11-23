@@ -1,0 +1,4 @@
+{
+  "extends": "Adapters.json",
+  "native_only": ["Diligent::RadientNetworkAssetResolverCreateInfo::pJavaVM"]
+}

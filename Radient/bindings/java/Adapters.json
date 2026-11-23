@@ -1,0 +1,6 @@
+{
+  "extends": "../Adapters.json",
+  "function_adapters": {
+    "Diligent::CreateRadientNetworkAssetResolver": "Diligent::RadientBindings::CreateNetworkAssetResolver"
+  }
+}

@@ -2,7 +2,7 @@
 
 The generated `diligent.radient.Radient` class and `RadientJNI` library call the
 production Radient implementation. The Java target consumes the shared
-[`API.json`](../API.json), [`Adapters.json`](../Adapters.json), and native adapters;
+[`API.json`](../API.json), [`Adapters.json`](Adapters.json), and native adapters;
 it does not duplicate Radient sources or use a mock engine.
 
 The initial integration supports CPU use. Owning blobs, engines, scenes, assets,
@@ -11,10 +11,14 @@ external thread pools, callbacks, and reference-storage blobs are not exposed.
 Creating an engine therefore uses the default CPU backend and an internally owned
 thread pool. Android graphics-device integration and distribution packaging are separate work.
 
-Build `RadientJNI` and `Radient-JavaClasses` with the Android NDK toolchain;
-the host JDK compiles the Java classes, while JNI headers come from the NDK.
-The generated wrappers require Android API 33 or newer for `java.lang.ref.Cleaner`.
-Desktop JVM tests are not run against Android libraries.
+On Android, the Java network-resolver factory automatically supplies its calling
+JVM. Native callers instead set `RadientNetworkAssetResolverCreateInfo::pJavaVM`.
+No activity or global JVM registration is required. Build `RadientJNI` and
+`Radient-JavaClasses` with the Android NDK toolchain; the host JDK compiles the
+Java classes, while JNI headers come from the NDK. The generated wrappers require
+Android API 33 or newer for `java.lang.ref.Cleaner`. Desktop JVM tests are not run
+against Android libraries. See the [Android resolver tests](../../../Tests/RadientTest/network/android/README.md)
+for emulator validation.
 
 ## Build and test
 

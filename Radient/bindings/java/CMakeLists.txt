@@ -6,6 +6,11 @@ if(NOT PLATFORM_ANDROID)
     find_package(JNI REQUIRED COMPONENTS JVM)
 endif()
 
+set(JAVA_ADAPTERS "${CMAKE_CURRENT_SOURCE_DIR}/Adapters.json")
+if(PLATFORM_ANDROID)
+    set(JAVA_ADAPTERS "${CMAKE_CURRENT_SOURCE_DIR}/AndroidAdapters.json")
+endif()
+
 set(GENERATED "${CMAKE_CURRENT_BINARY_DIR}/generated")
 set(MODEL "${CMAKE_CURRENT_BINARY_DIR}/../generated/Radient.json")
 
@@ -13,7 +18,7 @@ add_custom_target(Radient-GenerateJava
     COMMAND ${BINDING_COMMAND} "${BINDING_TOOLS}/java/generate.py"
         --model "${MODEL}" --module Radient --package diligent.radient
         --library RadientJNI --header Radient.h --header RadientMeshPrimitives.h
-        --header NativeAdapters.hpp --adapters "${CMAKE_CURRENT_SOURCE_DIR}/../Adapters.json"
+        --header NativeAdapters.hpp --header NativeJavaAdapters.hpp --adapters "${JAVA_ADAPTERS}"
         --output "${GENERATED}" --surface "${GENERATED}/api_surface.json"
     # Generation checks the reviewed contract before JNI or Java compilation.
     # Only the explicit Python update command may accept a changed baseline.
@@ -31,7 +36,7 @@ add_dependencies(RadientJNI Radient-GenerateJava)
 set_common_target_properties(RadientJNI)
 target_compile_features(RadientJNI PRIVATE cxx_std_17)
 target_include_directories(RadientJNI PRIVATE
-    "${CMAKE_CURRENT_SOURCE_DIR}/.." "${BINDING_TOOLS}/java" ${JNI_INCLUDE_DIRS})
+    "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}/.." "${BINDING_TOOLS}/java" ${JNI_INCLUDE_DIRS})
 # JNI is loaded by an existing JVM; no dependency on libjvm is needed.
 target_link_libraries(RadientJNI PRIVATE Radient Diligent-BuildSettings)
 
