@@ -2,7 +2,9 @@ cmake_minimum_required(VERSION 3.24)
 
 # Configured through the production Radient target with RADIENT_BUILD_JAVA_BINDINGS.
 find_package(Java 11 REQUIRED COMPONENTS Development Runtime)
-find_package(JNI REQUIRED COMPONENTS JVM)
+if(NOT PLATFORM_ANDROID)
+    find_package(JNI REQUIRED COMPONENTS JVM)
+endif()
 
 set(GENERATED "${CMAKE_CURRENT_BINARY_DIR}/generated")
 set(MODEL "${CMAKE_CURRENT_BINARY_DIR}/../generated/Radient.json")
@@ -45,6 +47,8 @@ add_custom_command(OUTPUT "${GENERATED}/classes.stamp"
 add_custom_target(Radient-JavaClasses ALL DEPENDS "${GENERATED}/classes.stamp")
 add_dependencies(Radient-JavaClasses Radient-GenerateJava)
 
-add_subdirectory(tests)
+if(NOT PLATFORM_ANDROID)
+    add_subdirectory(tests)
+endif()
 set_target_properties(Radient-GenerateJava RadientJNI Radient-JavaClasses
     PROPERTIES FOLDER "DiligentFX/Bindings")

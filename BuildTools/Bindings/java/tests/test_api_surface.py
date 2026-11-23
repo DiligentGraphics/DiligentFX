@@ -23,6 +23,15 @@ class APISurfaceTest(api_surface_cases.APISurfaceCases):
     adapters = load_config(TOOLS / "tests/native/Adapters.json")
     target = "native"
 
+    def test_function_adapter_is_part_of_reviewed_contract(self):
+        adapters = deepcopy(self.adapters)
+        adapters["function_adapters"] = {"Diligent::EchoTestMode": "Adapters::EchoMode"}
+        generator = self.make_generator(deepcopy(self.model_data), adapters)
+        generator.generate()
+        from api_surface import build_surface
+        surface = build_surface(generator, target="native")
+        self.assertEqual(surface["entries"]["Diligent::EchoTestMode"]["function_adapter"], "Adapters::EchoMode")
+
     def make_generator(self, model, adapters):
         return Generator(model, "BindingTests", "diligent.bindings.tests", "BindingTestsJNI", ["BindingTestAPI.h"], adapters)
 

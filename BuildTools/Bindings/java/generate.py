@@ -43,7 +43,15 @@ def mutable_type(t):
 
 class Generator(BindingAPI):
     def __init__(self, model, module, package, library, headers, adapters=None):
+        adapters = dict(adapters or {"schema_version": 1})
+        self.function_adapters = adapters.pop("function_adapters", {})
         super().__init__(model, adapters)
+        if not isinstance(self.function_adapters, dict):
+            raise ModelError("Java: function_adapters must map free functions to JNI adapters")
+        for name, adapter in self.function_adapters.items():
+            if (self.types.get(name, {}).get("kind") != "function" or
+                    not isinstance(adapter, str) or not re.fullmatch(r"[A-Za-z_]\w*(?:::[A-Za-z_]\w*)*", adapter)):
+                raise ModelError(f"Java: {name}: function adapter requires a selected free function and a qualified native function name")
         self.module = identifier(module)
         if module == "java":
             raise ModelError("Java: reserved module name java")
@@ -765,7 +773,9 @@ class Generator(BindingAPI):
             args.append(expr)
         result = fn["result"]
         result_info = self.info(result)
-        invocation = ("SelfNative.Ptr->" + name if owner else qualified) + "(" + ", ".join(args) + ")"
+        adapter = self.function_adapters.get(qualified) if not owner else None
+        invocation = ((adapter or ("SelfNative.Ptr->" + name if owner else qualified)) +
+                      "(" + ", ".join((["Env"] if adapter else []) + args) + ")")
         result_kind, result_type = self.shape(result)
         if result_kind == "interface":
             if unalias(result["type"])["kind"] == "reference":

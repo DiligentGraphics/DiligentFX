@@ -79,6 +79,8 @@ def build_surface(generator, *, target):
             result["scope"] = generator.scopes[name]
         if name in generator.fixed_arguments:
             result["fixed_arguments"] = generator.fixed_arguments[name]
+        if name in getattr(generator, "function_adapters", {}):
+            result["function_adapter"] = generator.function_adapters[name]
         return result
 
     entries = {}

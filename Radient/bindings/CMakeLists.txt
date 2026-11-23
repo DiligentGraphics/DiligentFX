@@ -87,10 +87,11 @@ endforeach()
 
 # The small extraction runs whenever requested, so edits to any transitive header
 # are picked up. The generator leaves unchanged output files untouched.
+set(BINDING_API "${CMAKE_CURRENT_SOURCE_DIR}/API.json")
 add_custom_target(Radient-GenerateBindingModel
     COMMAND ${BINDING_COMMAND} "${BINDING_TOOLS}/generate.py"
         --source-root "${FX_SOURCE_ROOT}"
-        --config "${CMAKE_CURRENT_SOURCE_DIR}/API.json"
+        --config "${BINDING_API}"
         --output "${CMAKE_CURRENT_BINARY_DIR}/generated/Radient.json"
         ${BINDING_ARGUMENTS}
     BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/generated/Radient.json"
@@ -103,7 +104,7 @@ add_test(NAME Bindings-Model
         ${BINDING_ARGUMENTS})
 add_test(NAME Radient-BindingModel
     COMMAND ${BINDING_COMMAND} "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_public_api.py" -v
-        ${BINDING_ARGUMENTS})
+        --config "${BINDING_API}" ${BINDING_ARGUMENTS})
 set_tests_properties(Bindings-Model Radient-BindingModel PROPERTIES LABELS "Bindings;Model")
 
 set_target_properties(Radient-GenerateBindingModel PROPERTIES FOLDER "DiligentFX/Bindings")
@@ -121,8 +122,8 @@ if(EMSCRIPTEN AND TARGET Radient)
 endif()
 
 if(RADIENT_BUILD_JAVA_BINDINGS)
-    if(CMAKE_CROSSCOMPILING OR EMSCRIPTEN OR NOT TARGET Radient)
-        message(FATAL_ERROR "Radient Java bindings require a native Radient build matching the host JVM architecture.")
+    if((CMAKE_CROSSCOMPILING AND NOT PLATFORM_ANDROID) OR EMSCRIPTEN OR NOT TARGET Radient)
+        message(FATAL_ERROR "Radient Java bindings require Android or a native Radient build matching the host JVM architecture.")
     endif()
     add_subdirectory(java)
 endif()

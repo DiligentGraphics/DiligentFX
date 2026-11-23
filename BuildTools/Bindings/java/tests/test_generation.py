@@ -53,6 +53,22 @@ class GenerationTest(unittest.TestCase):
         self.assertIn("EchoTestMode()", java)
         self.assertIn("Diligent::EchoTestMode(Diligent::TEST_MODE_LAST)", cpp)
 
+    def test_function_adapter_receives_calling_environment(self):
+        java, cpp = generate(self.model, adapters={
+            "function_adapters": {"Diligent::EchoTestMode": "Adapters::EchoMode"},
+        })
+        self.assertIn("EchoTestMode(", java)
+        self.assertIn("Adapters::EchoMode(Env,", cpp)
+        self.assertNotIn("Diligent::EchoTestMode(", cpp)
+
+    def test_invalid_function_adapters_are_rejected(self):
+        for adapters in [[], {"Missing": "Adapters::Call"},
+                         {"Diligent::TestDesc": "Adapters::Call"},
+                         {"Diligent::EchoTestMode": "arbitrary()"}]:
+            with self.subTest(adapters=adapters):
+                with self.assertRaisesRegex(backend.ModelError, "function.adapter"):
+                    generate(self.model, adapters={"function_adapters": adapters})
+
     def test_computed_field_counts_require_valid_adapters(self):
         for name, function in [("Diligent::MarshalNestedCountDesc::Missing", "Diligent::GetComputedCount"),
                                ("Diligent::MarshalNestedCountDesc::pComputed", "arbitrary()"),

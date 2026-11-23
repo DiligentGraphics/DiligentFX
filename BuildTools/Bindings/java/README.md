@@ -191,6 +191,14 @@ and its size fixed until release and enforce any reader/writer exclusion itself.
 
 ## Build and test
 
+Java-specific adapter configuration may extend the shared adapter file with
+`function_adapters`, mapping a selected free function to a qualified C++ function.
+The adapter receives the calling `JNIEnv*` followed by the original native
+arguments, and returns the original native result type. This supports platform
+context injection without exposing JVM pointers to Java. Supply its declaration
+through `--header`; method adapters are not supported. The API surface guard
+records these mappings.
+
 Requirements: CMake 3.24+, a native C++17 compiler, JDK 11 or later, and the same
 Python/LLVM 22 environment used by the shared binding model. The JDK and compiler
 must target the same architecture. Set `JAVA_HOME` if Java is not discoverable.

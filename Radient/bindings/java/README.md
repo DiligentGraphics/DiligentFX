@@ -9,7 +9,12 @@ The initial integration supports CPU use. Owning blobs, engines, scenes, assets,
 and animation use the existing shared binding selection. Native graphics handles,
 external thread pools, callbacks, and reference-storage blobs are not exposed.
 Creating an engine therefore uses the default CPU backend and an internally owned
-thread pool. Android packaging and graphics-device integration are separate work.
+thread pool. Android graphics-device integration and distribution packaging are separate work.
+
+Build `RadientJNI` and `Radient-JavaClasses` with the Android NDK toolchain;
+the host JDK compiles the Java classes, while JNI headers come from the NDK.
+The generated wrappers require Android API 33 or newer for `java.lang.ref.Cleaner`.
+Desktop JVM tests are not run against Android libraries.
 
 ## Build and test
 

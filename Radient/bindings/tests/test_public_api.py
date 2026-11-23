@@ -4,6 +4,7 @@ import argparse
 import json
 from pathlib import Path
 import sys
+import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -17,6 +18,8 @@ from generate import build_model
 
 API_TARGET = "x86_64-pc-windows-msvc" if sys.platform == "win32" else "x86_64-unknown-linux-gnu"
 CLANG_ARGS = []
+DEFAULT_API_CONFIG = ROOT / "Radient/bindings/API.json"
+API_CONFIG = DEFAULT_API_CONFIG
 
 
 def declarations(model):
@@ -31,13 +34,22 @@ def extract_public(headers, names):
 
 class PublicAPITest(unittest.TestCase):
     def test_shared_model_and_browser_extension(self):
-        config = load_config(ROOT / "Radient/bindings/API.json")
+        config = load_config(API_CONFIG)
         shared_model = build_model(ROOT, config, API_TARGET, CLANG_ARGS)
         shared = declarations(shared_model)
         self.assertTrue(all("/javascript/" not in d["source"]["file"] for d in shared.values()))
         self.assertNotIn("Diligent::CreateRadientBrowserEngine", shared)
 
-        browser_config = load_config(ROOT / "Radient/bindings/javascript/Model.json")
+        # Compare the real browser extension against the same platform-specific
+        # base used by production extraction.
+        browser_path = ROOT / "Radient/bindings/javascript/Model.json"
+        extension = json.loads(browser_path.read_text(encoding="utf-8"))
+        self.assertEqual((browser_path.parent / extension["extends"]).resolve(), DEFAULT_API_CONFIG.resolve())
+        extension["extends"] = str(API_CONFIG.resolve())
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "BrowserModel.json"
+            path.write_text(json.dumps(extension), encoding="utf-8")
+            browser_config = load_config(path)
         browser = declarations(build_model(ROOT, browser_config, API_TARGET, CLANG_ARGS))
         self.assertIn("Diligent::CreateRadientBrowserEngine", browser)
         for name, declaration in shared.items():
@@ -55,7 +67,7 @@ class PublicAPITest(unittest.TestCase):
                          "Diligent::RadientBindings::GetMaterialDefaultByteCount")
 
     def test_data_blob_contract(self):
-        config = json.loads((ROOT / "Radient/bindings/API.json").read_text(encoding="utf-8"))
+        config = load_config(API_CONFIG)
         self.assertTrue(all(Path(header).suffix == ".h" for header in config["headers"]))
         model = build_model(ROOT, config, API_TARGET, CLANG_ARGS)
         self.assertTrue(all(Path(declaration["source"]["file"]).suffix == ".h"
@@ -78,7 +90,7 @@ class PublicAPITest(unittest.TestCase):
         self.assertEqual(types["Diligent::RADIENT_STATUS"]["values"][-1]["value"], -7)
 
     def test_scene_selection_and_lifetimes(self):
-        config = json.loads((ROOT / "Radient/bindings/API.json").read_text(encoding="utf-8"))
+        config = load_config(API_CONFIG)
         types = declarations(build_model(ROOT, config, API_TARGET, CLANG_ARGS))
         engine = types["Diligent::IRadientEngine"]
         self.assertTrue({"GetAssetManager", "CreateScene", "CreateSceneWriter"}.issubset({m["name"] for m in engine["methods"]}))
@@ -226,8 +238,10 @@ class PublicAPITest(unittest.TestCase):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument("--target", default=API_TARGET)
+    parser.add_argument("--config", type=Path, default=API_CONFIG)
     parser.add_argument("--clang-arg", action="append", default=[])
     options, remaining = parser.parse_known_args()
     API_TARGET = options.target
+    API_CONFIG = options.config
     CLANG_ARGS = options.clang_arg
     unittest.main(argv=[sys.argv[0]] + remaining)
