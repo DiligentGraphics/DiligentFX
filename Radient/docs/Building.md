@@ -6,7 +6,7 @@ instructions with Radient-specific prerequisites.
 
 ## Native prerequisites
 
-On native platforms other than desktop Windows, including UWP, install OpenSSL
+On native platforms other than desktop Windows and Apple, including UWP, install OpenSSL
 development headers and libraries (for example, `libssl-dev` on Ubuntu). Set
 `OPENSSL_ROOT_DIR` if CMake cannot find them automatically. Cross builds require OpenSSL libraries built for
 the target platform, rather than the host. HTTPS also requires an appropriate
@@ -15,13 +15,17 @@ CA trust store at runtime.
 Desktop Windows uses the platform TLS implementation and does not require
 OpenSSL. UWP requires OpenSSL built for Windows Store; desktop Windows libraries
 cannot be used for that target.
+Apple platforms use Foundation's NSURLSession for HTTP(S), TLS, and certificate
+verification; curl and OpenSSL are not required. Applications must allow network
+access through their sandbox entitlements and App Transport Security configuration.
+The resolver does not override those policies.
 Web builds do not require native HTTP or TLS libraries. The browser network
 transport is not implemented yet in this branch.
 
 ## Offline configuration
 
-CMake downloads source dependencies during configuration. To supply curl source
-locally, set `FETCHCONTENT_SOURCE_DIR_RADIENT_CURL` to an extracted source tree
+CMake downloads source dependencies during configuration. On platforms using curl,
+set `FETCHCONTENT_SOURCE_DIR_RADIENT_CURL` to supply an extracted source tree
 matching the release pinned in [RadientCurl.cmake](../cmake/RadientCurl.cmake).
 Installed libcurl binaries are not used.
 

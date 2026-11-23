@@ -91,6 +91,7 @@ set(INCLUDE
     include/Assets/RadientAssetCache.hpp
     include/Assets/RadientAssetManagerImpl.hpp
     include/Assets/RadientAssetResolver.hpp
+    include/Assets/RadientNetworkAssetResolverCommon.hpp
     include/Assets/RadientAssetData.hpp
     include/Assets/RadientAssetURI.hpp
     include/Assets/RadientAssetValidation.hpp
@@ -188,6 +189,11 @@ set(INTERFACE
 
 if(PLATFORM_WEB)
     list(APPEND SOURCE src/Assets/RadientNetworkAssetResolverWeb.cpp)
+elseif(PLATFORM_APPLE)
+    list(APPEND SOURCE src/Assets/RadientNetworkAssetResolverApple.mm)
+    # ARC owns Foundation objects captured by asynchronous completion callbacks.
+    set_source_files_properties(src/Assets/RadientNetworkAssetResolverApple.mm
+        PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
 else()
     list(APPEND SOURCE src/Assets/RadientNetworkAssetResolverNative.cpp)
 endif()
@@ -237,7 +243,9 @@ if(RADIENT_GENERATE_BINDINGS OR RADIENT_BUILD_JAVA_BINDINGS)
     add_subdirectory(bindings)
 endif()
 
-if(NOT PLATFORM_WEB)
+if(PLATFORM_APPLE)
+    target_link_libraries(Radient PRIVATE "-framework Foundation")
+elseif(NOT PLATFORM_WEB)
     include(cmake/RadientCurl.cmake)
     radient_fetch_curl()
     target_link_libraries(Radient PRIVATE libcurl_static ZLIB::ZLIB)

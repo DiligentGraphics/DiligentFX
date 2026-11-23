@@ -97,6 +97,11 @@ DNS lookup even after a timeout. Consequently, `CheckAsset`, `OpenAsset`, and
 shutdown waits can exceed both configured timeouts; they are not strict
 return-time guarantees. HTTPS verifies server certificates and hostnames.
 
+On Apple platforms, `ConnectTimeoutMs` instead limits inactivity, including waits
+for response data; receiving data restarts this timeout. `RequestTimeoutMs` still
+bounds the entire request. Apple's networking policies and compressed-response
+validation apply.
+
 For custom storage, implement `IRadientAssetResolver`; its methods must support
 concurrent calls. `ResolveAssetLocation` produces an identity without loading
 contents, `CheckAsset` checks availability, and `OpenAsset` returns asset data.

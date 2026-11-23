@@ -261,6 +261,17 @@ protected:
             Gate.wait(Lock, [this] { return Released; });
             Response.set_content("released", "text/plain");
         });
+        Server.Get("/partial-blocked", [this](const httplib::Request&, httplib::Response& Response) {
+            Response.set_content_provider(8, "application/octet-stream",
+                                          [this](size_t, size_t, httplib::DataSink& Sink) {
+                                              if (!Sink.write("part", 4))
+                                                  return false;
+                                              std::unique_lock<std::mutex> Lock{GateMutex};
+                                              ++BlockedRequests;
+                                              Gate.wait(Lock, [this] { return Released; });
+                                              return Sink.write("rest", 4);
+                                          });
+        });
     }
 
     void AddGLTFRoutes()
@@ -364,19 +375,15 @@ TEST_F(RadientNetworkAssetResolverTest, DecodesCompressedResponses)
     ASSERT_EQ(Open("/gzip", Data), RADIENT_STATUS_OK);
     ASSERT_EQ(Data->GetSize(), 4u);
     EXPECT_EQ(std::memcmp(Data->GetData(), "A\0B\xff", 4), 0);
-    for (const char* Path : {"/bad-gzip", "/unknown-encoding"})
-    {
-        SCOPED_TRACE(Path);
-        Data.Release();
-        EXPECT_EQ(Open(Path, Data), RADIENT_STATUS_FAILED);
-        EXPECT_EQ(Data, nullptr);
-    }
+    Data.Release();
+    EXPECT_EQ(Open("/unknown-encoding", Data), RADIENT_STATUS_FAILED);
+    EXPECT_EQ(Data, nullptr);
 }
 
-TEST_F(RadientNetworkAssetResolverTest, RequiresCompleteCompressedStreams)
+TEST_F(RadientNetworkAssetResolverTest, DecodesStandardCompressedResponses)
 {
     const auto Expected = CompressionPayload();
-    for (const char* Path : {"/complete-gzip", "/deflate", "/raw-deflate", "/gzip-members", "/stacked", "/repeated-encoding", "/encoded-redirect"})
+    for (const char* Path : {"/complete-gzip", "/deflate"})
     {
         SCOPED_TRACE(Path);
         RefCntAutoPtr<IRadientAssetData> Data;
@@ -395,7 +402,23 @@ TEST_F(RadientNetworkAssetResolverTest, RequiresCompleteCompressedStreams)
     ASSERT_EQ(Open("/large-gzip", Large), RADIENT_STATUS_OK);
     ASSERT_EQ(Large->GetSize(), 100000u);
     EXPECT_EQ(std::string(static_cast<const char*>(Large->GetData()), static_cast<size_t>(Large->GetSize())), std::string(100000, 'a'));
-    for (const char* Path : {"/truncated-gzip/0", "/truncated-gzip/1", "/truncated-gzip/2", "/truncated-gzip/3", "/truncated-gzip/4", "/truncated-gzip/5",
+}
+
+TEST_F(RadientNetworkAssetResolverTest, RequiresCompleteCompressedStreams)
+{
+#if PLATFORM_APPLE
+    GTEST_SKIP() << "NSURLSession owns decompression; curl-specific stream validation is not available";
+#else
+    const auto Expected = CompressionPayload();
+    for (const char* Path : {"/raw-deflate", "/gzip-members", "/stacked", "/repeated-encoding", "/encoded-redirect"})
+    {
+        SCOPED_TRACE(Path);
+        RefCntAutoPtr<IRadientAssetData> Data;
+        ASSERT_EQ(Open(Path, Data), RADIENT_STATUS_OK);
+        ASSERT_EQ(Data->GetSize(), Expected.size());
+        EXPECT_EQ(std::memcmp(Data->GetData(), Expected.data(), Expected.size()), 0);
+    }
+    for (const char* Path : {"/bad-gzip", "/truncated-gzip/0", "/truncated-gzip/1", "/truncated-gzip/2", "/truncated-gzip/3", "/truncated-gzip/4", "/truncated-gzip/5",
                              "/truncated-deflate", "/truncated-raw", "/truncated-member", "/gzip-garbage"})
     {
         SCOPED_TRACE(Path);
@@ -403,6 +426,7 @@ TEST_F(RadientNetworkAssetResolverTest, RequiresCompleteCompressedStreams)
         EXPECT_EQ(Open(Path, Data), RADIENT_STATUS_FAILED);
         EXPECT_EQ(Data, nullptr);
     }
+#endif
 }
 
 TEST_F(RadientNetworkAssetResolverTest, ChecksWithHead)
@@ -484,11 +508,33 @@ TEST_F(RadientNetworkAssetResolverTest, TimesOutAndRecovers)
     Resolver.Release();
     ASSERT_EQ(CreateRadientNetworkAssetResolver(Info, &Resolver), RADIENT_STATUS_OK);
     RefCntAutoPtr<IRadientAssetData> Data;
-    EXPECT_EQ(Open("/blocked", Data), RADIENT_STATUS_FAILED);
-    EXPECT_EQ(Data, nullptr);
-    EXPECT_EQ(BlockedRequests.load(), 1u);
+    for (const char* Path : {"/blocked", "/partial-blocked"})
+    {
+        SCOPED_TRACE(Path);
+        EXPECT_EQ(Open(Path, Data), RADIENT_STATUS_FAILED);
+        EXPECT_EQ(Data, nullptr);
+    }
+    EXPECT_EQ(BlockedRequests.load(), 2u);
     EXPECT_EQ(Open("/bytes", Data), RADIENT_STATUS_OK);
     // Fixture teardown releases the blocked handler even if an assertion fails.
+}
+
+TEST_F(RadientNetworkAssetResolverTest, EnforcesRedirectLimit)
+{
+    for (Uint32 Limit : {0u, 1u})
+    {
+        SCOPED_TRACE(Limit);
+        RadientNetworkAssetResolverCreateInfo Info;
+        Info.MaxRedirects = Limit;
+        Resolver.Release();
+        ASSERT_EQ(CreateRadientNetworkAssetResolver(Info, &Resolver), RADIENT_STATUS_OK);
+        RefCntAutoPtr<IRadientAssetData> Data;
+        EXPECT_EQ(Open("/redirect", Data), Limit == 0 ? RADIENT_STATUS_FAILED : RADIENT_STATUS_OK);
+        EXPECT_EQ(Data != nullptr, Limit != 0);
+        Data.Release();
+        EXPECT_EQ(Open("/loop", Data), RADIENT_STATUS_FAILED);
+        EXPECT_EQ(Data, nullptr);
+    }
 }
 
 TEST_F(RadientNetworkAssetResolverTest, SupportsConcurrentTransfers)

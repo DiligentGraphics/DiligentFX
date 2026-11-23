@@ -73,6 +73,8 @@ typedef struct RadientFilesystemAssetResolverCreateInfo RadientFilesystemAssetRe
 struct RadientNetworkAssetResolverCreateInfo
 {
     /// Connection timeout in milliseconds, including DNS lookup and TLS handshake.
+    /// On Apple platforms, this is NSURLSession's inactivity timeout: it also
+    /// applies while waiting for response data and restarts when data arrives.
     /// Must be nonzero and no greater than INT32_MAX.
     Uint32 ConnectTimeoutMs DEFAULT_INITIALIZER(10000);
 
@@ -236,8 +238,11 @@ RADIENT_STATUS DILIGENT_GLOBAL_FUNCTION(CreateRadientFilesystemAssetResolver)(
 /// not interrupt an active transfer. Timeouts limit the network transfer, but curl's
 /// threaded DNS cleanup may still wait for an outstanding OS lookup before returning.
 /// CheckAsset, OpenAsset, and shutdown waits can therefore exceed both timeouts.
-/// Gzip and deflate responses are decoded before publication. Invalid or unsupported
-/// content encodings return FAILED without publishing partial data.
+/// Gzip and deflate responses are decoded before publication. Unsupported encodings
+/// and reported decoding errors return FAILED without publishing partial data.
+/// On Apple platforms, NSURLSession determines whether a compressed response is valid;
+/// the curl transport's additional end-of-stream and checksum validation is not applied.
+/// Apple App Transport Security and application network permissions remain in effect.
 /// The browser transport is not implemented yet; Web builds currently return UNSUPPORTED.
 RADIENT_STATUS DILIGENT_GLOBAL_FUNCTION(CreateRadientNetworkAssetResolver)(
     const RadientNetworkAssetResolverCreateInfo REF CreateInfo,

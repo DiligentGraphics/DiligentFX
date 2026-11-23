@@ -28,6 +28,7 @@
 
 
 #include "Assets/RadientAssetData.hpp"
+#include "Assets/RadientNetworkAssetResolverCommon.hpp"
 #include "RefCntAutoPtr.hpp"
 
 #include <curl/curl.h>
@@ -47,6 +48,8 @@ namespace Diligent
 {
 namespace
 {
+
+using namespace NetworkAssetResolverDetail;
 
 // Each request owns its easy handle. Global initialization happens before any
 // transfer and stays alive until process teardown, rather than per request.
@@ -98,25 +101,6 @@ RADIENT_STATUS ResolveURL(const RadientAssetResolveInfo& Info, std::string& Resu
     Result = Text.get();
     return RADIENT_STATUS_OK;
 }
-
-// {A316F08D-BB3D-4BF1-9C92-7AEC3E321931}
-constexpr INTERFACE_ID IID_NetworkAssetLocation =
-    {0xa316f08d, 0xbb3d, 0x4bf1, {0x9c, 0x92, 0x7a, 0xec, 0x3e, 0x32, 0x19, 0x31}};
-
-class NetworkAssetLocation final : public ObjectBase<IRadientAssetLocation>
-{
-public:
-    using TBase = ObjectBase<IRadientAssetLocation>;
-    NetworkAssetLocation(IReferenceCounters* Counters, std::string URL) :
-        TBase{Counters}, m_URL{std::move(URL)} {}
-
-    IMPLEMENT_QUERY_INTERFACE2_IN_PLACE(IID_RadientAssetLocation, IID_NetworkAssetLocation, TBase)
-
-    const Char* DILIGENT_CALL_TYPE GetLocation() const override { return m_URL.c_str(); }
-
-private:
-    const std::string m_URL;
-};
 
 size_t AppendBytes(char* Bytes, size_t Size, size_t Count, void* UserData) noexcept
 {
@@ -242,14 +226,6 @@ bool DecodeHTTPContent(CURL* Handle, std::vector<Uint8>& Bytes)
         if (!DecodeContentEncoding(*It, Bytes))
             return false;
     return true;
-}
-
-RADIENT_STATUS GetHTTPStatus(long Code)
-{
-    if (Code == 404 || Code == 410)
-        return RADIENT_STATUS_NOT_FOUND;
-    // No range was requested. A partial response is not a complete asset.
-    return Code >= 200 && Code < 300 && Code != 206 ? RADIENT_STATUS_OK : RADIENT_STATUS_FAILED;
 }
 
 class NetworkAssetResolver final : public ObjectBase<IRadientAssetResolver>
