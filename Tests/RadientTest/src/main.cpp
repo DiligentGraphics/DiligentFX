@@ -54,7 +54,7 @@ TEST(TestingEnvironment, MessageCallback)
 } // namespace
 
 
-int main(int argc, char** argv)
+int RunRadientTests(int argc, char** argv)
 {
 #if PLATFORM_WIN32
     _CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
@@ -72,3 +72,10 @@ int main(int argc, char** argv)
     std::cout << "\n\n\n";
     return ret_val;
 }
+
+#if !PLATFORM_ANDROID
+int main(int argc, char** argv)
+{
+    return RunRadientTests(argc, argv);
+}
+#endif

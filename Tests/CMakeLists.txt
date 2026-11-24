@@ -20,8 +20,8 @@ function(configure_radient_browser_test TARGET)
 endfunction()
 
 if(PLATFORM_ANDROID AND DILIGENT_BUILD_FX_TESTS)
-    # Android network tests need a JVM, but not Core's desktop GPU test framework.
-    add_subdirectory(RadientTest/network/android)
+    # Run CPU tests inside Android's JVM without the desktop GPU test framework.
+    add_subdirectory(RadientTest)
 elseif(TARGET gtest)
     if(DILIGENT_BUILD_FX_TESTS)
         add_subdirectory(DiligentFXGPUTest)

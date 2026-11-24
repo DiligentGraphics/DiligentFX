@@ -4,7 +4,13 @@ project(RadientTest)
 
 file(GLOB_RECURSE SOURCE  src/*.*)
 
-add_executable(RadientTest ${SOURCE})
+if(PLATFORM_ANDROID)
+    add_subdirectory(android)
+    add_library(RadientTest SHARED ${SOURCE} android/TestEntry.cpp network/android/TLSTimeoutTest.cpp)
+    target_compile_definitions(RadientTest PRIVATE RADIENT_ANDROID_NETWORK_TEST=1)
+else()
+    add_executable(RadientTest ${SOURCE})
+endif()
 set_common_target_properties(RadientTest)
 configure_radient_browser_test(RadientTest)
 
@@ -18,7 +24,7 @@ PRIVATE
 
 target_link_libraries(RadientTest
 PRIVATE
-    gtest_main
+    gtest
     Diligent-BuildSettings
     Diligent-TargetPlatform
     Diligent-TestFramework

@@ -3,7 +3,7 @@ package diligent.radient.tests;
 
 import static diligent.radient.Radient.*;
 
-public final class AndroidNetworkTest {
+public final class AndroidTest {
     private static native int run();
 
     public static void main(String[] args) {
@@ -23,8 +23,10 @@ public final class AndroidNetworkTest {
             engine.ppEngine.close();
         }
         System.load(args[0]);
-        if (run() != 0)
-            throw new AssertionError("Android resolver tests failed");
-        System.out.println("Android resolver and Java binding tests passed");
+        int status = run();
+        if (status == 0)
+            System.out.println("Android CPU, resolver, and Java binding tests passed");
+        // Preserve Google Test's exit status instead of Android's crash-handler status.
+        System.exit(status);
     }
 }

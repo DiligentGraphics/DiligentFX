@@ -17,7 +17,7 @@ No activity or global JVM registration is required. Build `RadientJNI` and
 `Radient-JavaClasses` with the Android NDK toolchain; the host JDK compiles the
 Java classes, while JNI headers come from the NDK. The generated wrappers require
 Android API 33 or newer for `java.lang.ref.Cleaner`. Desktop JVM tests are not run
-against Android libraries. See the [Android resolver tests](../../../Tests/RadientTest/network/android/README.md)
+against Android libraries. See the [Android CPU and resolver tests](../../../Tests/RadientTest/android/README.md)
 for emulator validation.
 
 ## Build and test

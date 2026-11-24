@@ -39,6 +39,23 @@
 using namespace Diligent;
 using namespace Diligent::Testing;
 
+namespace
+{
+void ExpectDefaultNetworkLocation(IRadientAssetResolver* Resolver, const RadientAssetResolveInfo& Info, const char* Expected)
+{
+    RefCntAutoPtr<IRadientAssetLocation> Location;
+#if PLATFORM_ANDROID
+    // The implicit resolver has no JVM; Android networking requires an
+    // explicit resolver, exercised by the shared HTTP fixtures.
+    EXPECT_EQ(Resolver->ResolveAssetLocation(Info, &Location), RADIENT_STATUS_UNSUPPORTED);
+    EXPECT_EQ(Location, nullptr);
+#else
+    ASSERT_EQ(Resolver->ResolveAssetLocation(Info, &Location), RADIENT_STATUS_OK);
+    EXPECT_STREQ(Location->GetLocation(), Expected);
+#endif
+}
+} // namespace
+
 TEST(RadientAssetResolverTest, DetectsURISchemes)
 {
     EXPECT_FALSE(RadientFilesystemAssetResolver::HasURIScheme(""));
@@ -323,9 +340,7 @@ TEST(RadientAssetResolverTest, PreservesPercentEscapesInDependencyPaths)
         ASSERT_EQ(Resolver->OpenAsset(Location, &Data), RADIENT_STATUS_OK);
         EXPECT_EQ(Data->GetSize(), 4u);
     }
-    RefCntAutoPtr<IRadientAssetLocation> Location;
-    ASSERT_EQ(Resolver->ResolveAssetLocation({"https://example.com/image.png", Base.c_str()}, &Location), RADIENT_STATUS_OK);
-    EXPECT_STREQ(Location->GetLocation(), "https://example.com/image.png");
+    ExpectDefaultNetworkLocation(Resolver, {"https://example.com/image.png", Base.c_str()}, "https://example.com/image.png");
 }
 
 TEST(RadientAssetDataTest, AdoptsAllocationWithoutCopyAndReleasesItOnce)
@@ -429,9 +444,7 @@ TEST(RadientAssetResolverTest, DefaultRoutesURLsAndRelativeDependencies)
     for (const auto& Item : Cases)
     {
         SCOPED_TRACE(Item.URI);
-        RefCntAutoPtr<IRadientAssetLocation> Location;
-        ASSERT_EQ(Resolver->ResolveAssetLocation({Item.URI, Item.Base}, &Location), RADIENT_STATUS_OK);
-        EXPECT_STREQ(Location->GetLocation(), Item.Expected);
+        ExpectDefaultNetworkLocation(Resolver, {Item.URI, Item.Base}, Item.Expected);
     }
     for (const auto& Item : {RadientAssetResolveInfo{"ftp://host/file", "https://host/model"},
                              RadientAssetResolveInfo{"package:asset", nullptr},
