@@ -38,7 +38,7 @@ class APISurfaceCases(unittest.TestCase):
         self.assertEqual(entries["Diligent::BorrowObject"]["result"]["policy"]["ownership"], "borrowed")
         self.assertTrue(any(e["kind"] == "enumerator" for e in entries.values()))
         self.assertEqual(entries["Diligent::MarshalExportNames::Parts"]["type"], self.type_name("uint:32[2]", "u32[2]"))
-        self.assertEqual(entries["Diligent::MarshalAnimationName"]["type"], "const char_s:8[12]")
+        self.assertEqual(entries["Diligent::MarshalAnimationName"]["type"], self.type_name("const char_s:8[12]", "const char:8[12]"))
 
     def test_ignores_documentation_locations_and_declaration_order(self):
         model = deepcopy(self.model_data)

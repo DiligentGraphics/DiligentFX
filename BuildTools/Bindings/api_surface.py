@@ -7,6 +7,8 @@ import json
 from pathlib import Path
 import sys
 
+from binding_model import unalias
+
 
 def build_surface(generator, *, target):
     """Use the emitter's effective selection and policies, after successful generation.
@@ -20,19 +22,21 @@ def build_surface(generator, *, target):
         raise ValueError(f"Unsupported API surface target: {target}")
     aliases = {name for name, d in generator.types.items() if d["kind"] == "alias"}
 
-    def native_type(t):
+    def native_type(t, text_chars=False):
         qualifiers = " ".join(q for q in ("const", "volatile") if t.get(q))
         kind = t["kind"]
         if kind == "alias" and t["name"] not in aliases:
             aliased = dict(t["target"])
             for q in ("const", "volatile"):
                 aliased[q] = t.get(q, False) or aliased.get(q, False)
-            return native_type(aliased)
+            return native_type(aliased, text_chars)
         if kind in ("alias", "named"):
             result = t["name"]
         elif kind == "scalar":
             result = f'{t["name"]}:{t["bits"]}'
-            if target == "native" and t["name"] not in ("bool", "float", "double", "char_s", "char_u"):
+            if text_chars and t["name"] in ("char_s", "char_u"):
+                result = f'char:{t["bits"]}'
+            elif target == "native" and t["name"] not in ("bool", "float", "double", "char_s", "char_u"):
                 # Fixed-width aliases can resolve to long on LP64 and long long
                 # on LLP64. Their width and signedness, not that implementation
                 # spelling, determine the binding contract. Keep plain char
@@ -41,16 +45,35 @@ def build_surface(generator, *, target):
         elif kind == "void":
             result = "void"
         elif kind in ("pointer", "reference"):
-            result = native_type(t["target"]) + ("*" if kind == "pointer" else "&")
+            result = native_type(t["target"], text_chars) + ("*" if kind == "pointer" else "&")
             return result + (" " + qualifiers if qualifiers else "")
         elif kind == "array":
             element = dict(t["element"])
             for q in ("const", "volatile"):
                 element[q] = t.get(q, False) or element.get(q, False)
-            return f'{native_type(element)}[{t["count"]}]'
+            return f'{native_type(element, text_chars)}[{t["count"]}]'
         else:
             raise ValueError(f"Unsupported API surface type: {kind}")
         return (qualifiers + " " if qualifiers else "") + result
+
+    def uses_text_char(item):
+        if target != "native":
+            return False
+        t = unalias(item["type"])
+        if t["kind"] == "array":
+            return (item.get("kind") == "constant" and isinstance(item.get("value"), str) and
+                    unalias(t["element"]).get("name") in ("char_s", "char_u"))
+        while t["kind"] in ("pointer", "reference"):
+            t = unalias(t["target"])
+        if t.get("name") not in ("char_s", "char_u") or item.get("policy", {}).get("binding", "automatic") != "automatic":
+            return False
+        # Both ARM's unsigned char and x86's signed char encode the same UTF-8
+        # strings. Ask the emitter to distinguish strings from numeric spans;
+        # scalar and array signedness must still be checked for numeric bindings.
+        return generator.shape(item)[0] == "string"
+
+    def binding_type(item):
+        return native_type(item["type"], uses_text_char(item))
 
     def policy(value):
         # Selection has already been applied. Reasons and binding mechanisms
@@ -59,7 +82,7 @@ def build_surface(generator, *, target):
                 if k not in ("binding", "reason", "include_methods", "exclude_methods")}
 
     def value(item):
-        result = {"type": native_type(item["type"])}
+        result = {"type": binding_type(item)}
         if "name" in item:
             result["name"] = item["name"]
         if item.get("default") is not None:
@@ -111,10 +134,14 @@ def build_surface(generator, *, target):
             entry["underlying_type"] = native_type(d["underlying_type"])
             for enumerator in d["values"]:
                 entries[name + "::" + enumerator["name"]] = {"kind": "enumerator", "value": enumerator["value"]}
-        elif kind in ("alias", "constant"):
+        elif kind == "alias":
+            # A typedef has no usage policy: even const char* may be a counted
+            # numeric span. Preserve its signedness and do not classify it as an
+            # argument (mutable pointers may require policies supplied at use).
             entry["type"] = native_type(d["type"])
-            if kind == "constant":
-                entry["value"] = d["value"]
+        elif kind == "constant":
+            entry["type"] = binding_type(d)
+            entry["value"] = d["value"]
         else:
             raise ValueError(f"Unsupported API surface declaration: {kind}")
         entries[name] = entry

@@ -18,6 +18,17 @@ from configuration import load_config
 MODEL_PATH = Path(sys.argv.pop(1))
 
 
+def replace_scalar_names(item, replacements):
+    if isinstance(item, dict):
+        if item.get("kind") == "scalar":
+            item["name"] = replacements.get(item["name"], item["name"])
+        for child in item.values():
+            replace_scalar_names(child, replacements)
+    elif isinstance(item, list):
+        for child in item:
+            replace_scalar_names(child, replacements)
+
+
 class APISurfaceTest(api_surface_cases.APISurfaceCases):
     model_data = json.loads(MODEL_PATH.read_text(encoding="utf-8"))
     adapters = load_config(TOOLS / "tests/native/Adapters.json")
@@ -38,17 +49,63 @@ class APISurfaceTest(api_surface_cases.APISurfaceCases):
     def test_native_integer_spelling_and_platform_names_are_normalized(self):
         model = deepcopy(self.model_data)
         model["target"] = "x86_64-unknown-linux-gnu"
-        def lp64(item):
-            if isinstance(item, dict):
-                if item.get("kind") == "scalar" and item["name"] in ("longlong", "ulonglong"):
-                    item["name"] = {"longlong": "long", "ulonglong": "ulong"}[item["name"]]
-                for child in item.values():
-                    lp64(child)
-            elif isinstance(item, list):
-                for child in item:
-                    lp64(child)
-        lp64(model)
+        replace_scalar_names(model, {"longlong": "long", "ulonglong": "ulong"})
         self.assertEqual(self.surface(model), self.surface())
+
+    def test_plain_char_signedness_is_platform_dependent(self):
+        model = deepcopy(self.model_data)
+        replace_scalar_names(model, {"char_s": "char_u"})
+        actual, baseline = self.surface(model)["entries"], self.surface()["entries"]
+        for name in ("TextByteCount", "GetEscapedExportName", "MarshalExportNames::Name",
+                     "MarshalAnimationName", "MarshalAnimationNamePointer"):
+            with self.subTest(name=name):
+                self.assertEqual(actual["Diligent::" + name], baseline["Diligent::" + name])
+        # Numeric char arrays produce different Java array types; preserve that
+        # distinction for both fixed arrays and pointer/count descriptor fields.
+        for name in ("MarshalFixedArrays::ValuesChar", "MarshalOutputArrayDesc::pChar"):
+            with self.subTest(name=name):
+                self.assertNotEqual(actual["Diligent::" + name], baseline["Diligent::" + name])
+
+    def test_character_pointer_aliases_preserve_numeric_span_signedness(self):
+        from api_surface import build_surface
+        for const in (True, False):
+            with self.subTest(const=const):
+                surfaces = []
+                for scalar, java_type in (("char_s", "byte"), ("char_u", "short")):
+                    model = deepcopy(self.model_data)
+                    alias = self.declaration(model, "MarshalPropertyName")
+                    # Use a selected pointer typedef as a counted numeric span.
+                    # Its declaration has no parameter-specific length policy.
+                    char = {"kind": "scalar", "name": scalar, "bits": 8,
+                            "const": const, "volatile": False}
+                    alias["type"] = {"kind": "pointer", "target": char,
+                                     "const": False, "volatile": False}
+                    parameter = self.declaration(model, "SumValues")["parameters"][0]
+                    parameter["type"] = {"kind": "alias", "name": alias["name"],
+                                         "target": deepcopy(alias["type"]),
+                                         "const": False, "volatile": False}
+                    generator = self.make_generator(model, self.adapters)
+                    java, _ = generator.generate()
+                    self.assertIn(f"SumValues({java_type}[] pValues,", java)
+                    surface = build_surface(generator, target="native")
+                    self.assertEqual(surface["entries"][alias["name"]]["type"],
+                                     ("const " if const else "") + scalar + ":8*")
+                    self.assertEqual(surface["entries"]["Diligent::SumValues"]["parameters"][0]["type"],
+                                     alias["name"])
+                    surfaces.append(surface)
+                self.assertNotEqual(surfaces[0], surfaces[1])
+
+    def test_plain_char_remains_distinct_from_explicit_byte_types(self):
+        baseline = self.surface()
+        for name in ("schar", "uchar"):
+            with self.subTest(name=name):
+                model = deepcopy(self.model_data)
+                element = self.declaration(model, "MarshalAnimationName")["type"]["element"]
+                while element["kind"] == "alias":
+                    element = element["target"]
+                element["name"] = name
+                actual = self.surface(model)["entries"]["Diligent::MarshalAnimationName"]
+                self.assertNotEqual(actual, baseline["entries"]["Diligent::MarshalAnimationName"])
 
     def test_native_type_width_and_signedness_changes_are_detected(self):
         for name, bits in (("uint", 32), ("longlong", 64)):
