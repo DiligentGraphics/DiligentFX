@@ -1,0 +1,64 @@
+name: Android build
+
+on: [push, pull_request]
+
+env:
+  ANDROID_NDK_VERSION: 30.0.16248370
+
+jobs:
+  build:
+    runs-on: ubuntu-26.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: armeabi-v7a
+            build_type: RelWithDebInfo
+          - arch: arm64-v8a
+            build_type: RelWithDebInfo
+          - arch: x86_64
+            build_type: Debug
+    name: Linux -> Android-${{matrix.arch}}, ${{matrix.build_type}}
+
+    steps:
+    - name: Checkout
+      uses: DiligentGraphics/github-action/checkout@v37
+
+    - name: Set up build environment
+      uses: DiligentGraphics/github-action/setup-build-env@v37
+      with:
+        platform: Android
+
+    - name: Set up Java binding generation
+      uses: DiligentGraphics/github-action/setup-java-bindings@v37
+      with:
+        java-home: ${{env.JAVA_HOME}}
+
+    - name: Configure CMake
+      uses: DiligentGraphics/github-action/configure-cmake@v37
+      with:
+        generator: Ninja
+        build-type: ${{matrix.build_type}}
+        cmake-args: >-
+          -DCMAKE_TOOLCHAIN_FILE="${{env.ANDROID_HOME}}/ndk/${{env.ANDROID_NDK_VERSION}}/build/cmake/android.toolchain.cmake"
+          -DANDROID_ABI=${{matrix.arch}} -DANDROID_PLATFORM=android-28 -DANDROID_STL=c++_static
+          -DDILIGENT_BUILD_FX_TESTS=ON -DDILIGENT_BUILD_FX_INCLUDE_TEST=ON
+          -DDILIGENT_BUILD_GOOGLE_TEST=OFF
+          ${{env.RADIENT_JAVA_CMAKE_ARGS}}
+
+    # configure-cmake enables -Werror. Reuse its build for JNI and the CPU suite.
+    - name: Build
+      uses: DiligentGraphics/github-action/build@v37
+      with:
+        target: RadientTest RadientJNI Radient-JavaClasses DiligentFX-IncludeTest
+
+    - name: Test Android runner and binding model
+      run: |
+        ctest --test-dir "$DILIGENT_BUILD_DIR/DiligentFX/Tests/RadientTest/android" --output-on-failure
+        ctest --test-dir "$DILIGENT_BUILD_DIR/DiligentFX/Radient/bindings" -L Model --output-on-failure
+
+    - name: Test Radient on Android
+      if: matrix.arch == 'x86_64'
+      uses: DiligentGraphics/github-action/run-radient-android-tests@v37
+      with:
+        artifact-name: RadientAndroid-${{matrix.arch}}-${{matrix.build_type}}

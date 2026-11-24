@@ -21,12 +21,24 @@ the Core GPU test framework is not supported on Android. Supply the usual LLVM
 and `Radient-JavaClasses`.
 
 With a booted emulator or connected device, run from a host with the Android SDK
-build tools and a JDK on PATH:
+build tools and a JDK on PATH. Install the pinned launcher dependencies first:
+
+```sh
+sdkmanager "platforms;android-35" "build-tools;35.0.0"
+```
+
+Run the tests:
 
 ```sh
 python3 DiligentFX/Tests/RadientTest/android/run_tests.py \
     --sdk "$ANDROID_HOME" --build /path/to/android-build
 ```
+
+The runner defaults to compile SDK **35** and build tools **35.0.0**. Override
+these explicitly with `--compile-sdk` and `--build-tools-version`; missing packages
+cause an error rather than a fallback to another installed version. The shared
+CI action installs these exact packages. Compile SDK selection is independent
+of the device/emulator API level and the native build's NDK API level.
 
 Use `--serial` when more than one device is connected. The runner compiles the
 Java entry point, converts classes with D8, and runs them through `app_process`
@@ -48,3 +60,14 @@ This harness uses the shell process's network permission. Applications must
 declare `android.permission.INTERNET` and configure any required cleartext-network
 exceptions themselves. The loopback tests do not validate application manifests
 or HTTPS certificate policies.
+
+CI compiles the suite and JNI bindings for ARM32/ARM64 with NDK r30 and
+warnings-as-errors, and runs the x86-64 Debug build on an API 35 emulator.
+`run-radient-android-tests` in the shared action repository starts the emulator
+and publishes the console log, logcat, and XML report. The main repository reuses
+its Samples Gradle build for ARM Radient/JNI compilation; only the emulator ABI
+needs a separate native build. Test selection and assets remain in this module.
+
+The cpp-httplib loopback fixtures require 64-bit builds and run on the x86-64
+emulator. ARM32 still compiles the CPU suite, JNI integration, and the standalone
+TLS-timeout fixture, which does not use cpp-httplib.

@@ -13,25 +13,63 @@ import run_tests
 
 
 class SDKLauncherTest(unittest.TestCase):
+    def make_inputs(self, root, compile_sdk="35", build_tools_version="35.0.0"):
+        sdk, build = root / "SDK", root / "build"
+        tools = sdk / "build-tools" / build_tools_version
+        tools.mkdir(parents=True)
+        run_tests.sdk_tool(tools, "d8").touch()
+        platform = sdk / "platforms" / ("android-" + compile_sdk)
+        platform.mkdir(parents=True)
+        (platform / "android.jar").touch()
+        (build / "DiligentFX/Radient/bindings/java/generated/classes").mkdir(parents=True)
+        return sdk, build, tools
+
+    def test_launcher_uses_pinned_packages_even_when_newer_versions_exist(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            sdk, build, tools = self.make_inputs(root)
+            for name in ("android-37", "android-37.2-beta3", "android-36-ext19"):
+                (sdk / "platforms" / name).mkdir()
+            (sdk / "build-tools/37.0.0").mkdir()
+            with patch.object(run_tests, "run") as commands:
+                run_tests.compile_launcher(sdk, build / "DiligentFX/Radient/bindings/java/generated",
+                                           root / "temporary", "35", "35.0.0")
+            d8 = commands.call_args_list[-1].args
+            self.assertEqual(d8[0], run_tests.sdk_tool(tools, "d8"))
+            self.assertEqual(d8[d8.index("--lib") + 1], sdk / "platforms/android-35/android.jar")
+
+    def test_missing_pinned_packages_do_not_fall_back(self):
+        for compile_sdk, tools_version in (("36", "35.0.0"), ("35", "36.0.0")):
+            with self.subTest(compile_sdk=compile_sdk, tools=tools_version), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                sdk, build, _ = self.make_inputs(root)
+                with patch.object(run_tests, "run") as commands, \
+                        self.assertRaisesRegex(RuntimeError, "Required Android SDK file is missing"):
+                    run_tests.compile_launcher(sdk, build / "DiligentFX/Radient/bindings/java/generated",
+                                               root / "temporary", compile_sdk, tools_version)
+                commands.assert_not_called()
+
     def test_runner_uses_host_specific_launchers(self):
         for host, adb, d8 in [("win32", "adb.exe", "d8.bat"),
                               ("linux", "adb", "d8"), ("darwin", "adb", "d8")]:
             with self.subTest(host=host), tempfile.TemporaryDirectory() as directory:
                 root = Path(directory)
-                sdk, build = root / "SDK", root / "build"
-                tools = sdk / "build-tools/35.0.0"
-                tools.mkdir(parents=True)
-                (sdk / "platforms/android-35").mkdir(parents=True)
-                (build / "DiligentFX/Radient/bindings/java/generated/classes").mkdir(parents=True)
+                with patch.object(run_tests.sys, "platform", host):
+                    sdk, build, tools = self.make_inputs(root, "34", "34.0.0")
                 for name in ("libRadientJNI.so", "libRadientTest.so"):
                     (build / name).touch()
+                argv = ["run_tests.py", "--sdk", str(sdk), "--build", str(build),
+                        "--results", str(root / "results"), "--compile-sdk", "34",
+                        "--build-tools-version", "34.0.0"]
                 with patch.object(run_tests.sys, "platform", host), \
-                        patch.object(run_tests.sys, "argv", ["run_tests.py", "--sdk", str(sdk), "--build", str(build), "--results", str(root / "results")]), \
+                        patch.object(run_tests.sys, "argv", argv), \
                         patch.object(run_tests, "run") as commands:
                     commands.return_value.returncode = 0
                     run_tests.main()
                 launchers = [call.args[0] for call in commands.call_args_list]
                 self.assertEqual(launchers[:3], ["javac", "jar", tools / d8])
+                d8_args = commands.call_args_list[2].args
+                self.assertEqual(d8_args[d8_args.index("--lib") + 1], sdk / "platforms/android-34/android.jar")
                 self.assertTrue(all(tool == sdk / "platform-tools" / adb for tool in launchers[3:]))
 
     @unittest.skipUnless(sys.platform == "win32", "Requires Windows batch execution")

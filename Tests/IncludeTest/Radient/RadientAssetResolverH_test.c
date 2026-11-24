@@ -43,7 +43,7 @@ void RadientAssetResolver_C_TestMacros(IRadientAssetResolver* pAssetResolver,
                                        IRadientAssetLocation* pLocation,
                                        IRadientAssetData*     pAssetData)
 {
-    RadientNetworkAssetResolverCreateInfo    NetworkInfo = {10000, 60000, 10};
+    RadientNetworkAssetResolverCreateInfo    NetworkInfo = {0};
     RadientFilesystemAssetResolverCreateInfo CreateInfo  = {0};
     RadientAssetResolveInfo                  ResolveInfo = {0};
     const char*                              LocationURI = IRadientAssetLocation_GetLocation(pLocation);

@@ -30,17 +30,23 @@ def sdk_tool(directory, name):
     return directory / (name + suffix)
 
 
-def compile_launcher(sdk, generated, temporary):
-    build_tools = max((sdk / "build-tools").iterdir(),
-                      key=lambda path: tuple(int(part) for part in path.name.split(".")))
-    platform = max((sdk / "platforms").glob("android-*"),
-                   key=lambda path: int(path.name.split("-")[1]))
+def compile_launcher(sdk, generated, temporary, compile_sdk, build_tools_version):
+    # Use the requested packages exactly; newer installed SDKs must not change
+    # the launcher or D8 version used by an otherwise identical test run.
+    d8 = sdk_tool(sdk / "build-tools" / build_tools_version, "d8")
+    android_jar = sdk / "platforms" / ("android-" + compile_sdk) / "android.jar"
+    for path in (d8, android_jar):
+        if not path.is_file():
+            raise RuntimeError(f"Required Android SDK file is missing: {path}. "
+                               f'Install "platforms;android-{compile_sdk}" and '
+                               f'"build-tools;{build_tools_version}" with sdkmanager.')
+    print(f"Android launcher: compile SDK {compile_sdk}, build tools {build_tools_version}", flush=True)
     classes = temporary / "classes"
     shutil.copytree(generated / "classes", classes)
     run("javac", "--release", "11", "-Xlint:all", "-Werror", "-cp", classes,
         "-d", classes, Path(__file__).with_name("AndroidTest.java"))
     run("jar", "--create", "--file", temporary / "tests.jar", "-C", classes, ".")
-    run(sdk_tool(build_tools, "d8"), "--min-api", "33", "--lib", platform / "android.jar",
+    run(d8, "--min-api", "33", "--lib", android_jar,
         "--output", temporary, temporary / "tests.jar")
 
 
@@ -80,6 +86,8 @@ def run_device_tests(adb, build, temporary, destination, results, test_filter, t
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--sdk", type=Path, required=True)
+    parser.add_argument("--compile-sdk", default="35", help="Exact Android SDK platform version (default: 35)")
+    parser.add_argument("--build-tools-version", default="35.0.0", help="Exact Android build-tools version (default: 35.0.0)")
     parser.add_argument("--build", type=Path, required=True,
                         help="Root of the configured DiligentEngine Android build (one ABI)")
     parser.add_argument("--serial", help="adb device serial")
@@ -98,7 +106,7 @@ def main():
     destination = "/data/local/tmp/radient-tests-" + uuid.uuid4().hex
     with tempfile.TemporaryDirectory(prefix="radient-android-tests-") as temporary:
         temp = Path(temporary)
-        compile_launcher(args.sdk, generated, temp)
+        compile_launcher(args.sdk, generated, temp, args.compile_sdk, args.build_tools_version)
         run_device_tests(adb, args.build, temp, destination, args.results, args.filter, args.timeout)
 
 

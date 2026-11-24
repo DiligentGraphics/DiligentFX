@@ -84,13 +84,9 @@ jobs:
         cmake-generator: ${{ matrix.cmake_generator }}
 
     # Run Java marshalling and Radient integration tests in GCC/Clang Debug and Release.
-    - name: Set up Java binding tests
+    - name: Set up Java bindings
       if: matrix.name == 'GCC' || matrix.name == 'Clang'
-      uses: DiligentGraphics/github-action/setup-java-binding-tests@v36
-      with:
-        configuration: ${{ matrix.build_type }}
-        cc: ${{ matrix.cc }}
-        cxx: ${{ matrix.cxx }}
+      uses: DiligentGraphics/github-action/setup-java-bindings@v37
 
     - name: Configure CMake
       if:   success()
@@ -108,10 +104,18 @@ jobs:
       if: success()
       uses: DiligentGraphics/github-action/build@v35
 
+    - name: Build Java marshalling tests
+      if: matrix.name == 'GCC' || matrix.name == 'Clang'
+      uses: DiligentGraphics/github-action/build-java-binding-tests@v37
+      with:
+        configuration: ${{ matrix.build_type }}
+        cc: ${{ matrix.cc }}
+        cxx: ${{ matrix.cxx }}
+
     # Reuse the JNI library and Java classes produced by the main build.
     - name: Test Java bindings
       if: matrix.name == 'GCC' || matrix.name == 'Clang'
-      uses: DiligentGraphics/github-action/run-java-binding-tests@v36
+      uses: DiligentGraphics/github-action/run-java-binding-tests@v37
 
     - name: RadientTest
       if:   success()
