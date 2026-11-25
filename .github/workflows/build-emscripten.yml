@@ -142,3 +142,10 @@ jobs:
         models-path: ${{github.workspace}}/glTF-Sample-Assets
         assets-path: ${{github.workspace}}/DiligentTestData
         artifact-name: RadientBrowserRenderImages-${{matrix.build_type}}
+
+    # Reuse the tested Release SDK; publishing will consume this exact tarball.
+    - name: Package and validate Radient npm SDK
+      if: ${{ success() && runner.os == 'Linux' && matrix.build_type == 'Release' }}
+      uses: DiligentGraphics/github-action/package-radient-npm@v38
+      with:
+        artifact-name: RadientNpmPackage

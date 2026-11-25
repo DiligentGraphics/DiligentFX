@@ -1,0 +1,18 @@
+{
+  "name": "@diligentgraphics/radient",
+  "version": "0.1.0-dev.0",
+  "description": "Radient scene loading, inspection, animation, and WebGPU rendering",
+  "type": "module",
+  "license": "Apache-2.0",
+  "repository": {"type": "git", "url": "https://github.com/DiligentGraphics/DiligentEngine.git"},
+  "exports": {
+    ".": {"types": "./index.d.mts", "import": "./index.mjs"},
+    "./browser": {"types": "./browser.d.mts", "import": "./browser.mjs"},
+    "./build-info.json": "./build-info.json"
+  },
+  "bin": {"radient-copy-assets": "./copy-assets.mjs"},
+  "files": ["*.mjs", "*.d.mts", "dist", "build-info.json", "licenses", "LICENSE", "README.md"],
+  "dependencies": {"@webgpu/types": "0.1.69"},
+  "devDependencies": {"typescript": "5.9.3"},
+  "publishConfig": {"access": "public"}
+}

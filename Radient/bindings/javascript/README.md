@@ -496,3 +496,44 @@ Browser networking uses fetch and obeys CORS. Load through the asset manager and
 poll `GetRadientAssetLoadStatus()` asynchronously so the browser can process
 network callbacks. No JSPI or Asyncify is required. Browser timeout and redirect
 semantics are documented in the [network resolver contract](../../readme.md#network-asset-resolver).
+
+## npm package assembly and validation
+
+`package/` owns the `@diligentgraphics/radient` package metadata, public loaders,
+asset-copy command, and installed-consumer tests. Generated runtime files remain
+build artifacts. The reusable `package-radient-npm@v38` action runs in
+Linux Release CI in FX and the main repository, after existing tests. It uses
+the already-built `RadientWasm`; no additional native build is performed.
+
+The small package loaders are maintained as `index.mts`, `browser.mts`, and an
+internal `runtime-loader.mts`. Assembly installs the locked TypeScript compiler
+in the package staging directory and emits `.mjs` and `.d.mts` files together.
+Do not maintain separate loader declarations. Compiler errors stop assembly;
+only emitted loaders/declarations and runtime assets enter the npm tarball.
+The larger Radient bindings and declarations remain generated from the native API.
+
+To validate locally from the engine root after a Release/WebGPU build:
+
+```sh
+python DiligentFX/Radient/bindings/javascript/package/assemble.py \
+  --build-dir build/web-release --output package-check/package
+npm pack ./package-check/package --pack-destination package-check --json
+python DiligentFX/Radient/bindings/javascript/package/tests/run_tests.py \
+  --tarball package-check/diligentgraphics-radient-0.1.0-dev.0.tgz \
+  --work-dir package-check/consumer --browser /path/to/chrome
+```
+
+Assembly and consumer directories must be new. Node 24, npm, Python 3.10+, and a
+WebGPU-capable Chrome are required; CI selects SwiftShader through the shared
+action wrapper. Tests install the exact tarball, compile a strict TypeScript
+consumer, verify runtime hashes and blob access in Node, build with Vite and Webpack, and
+serve the browser application under `/viewer/`. Only installed
+package files are used at runtime. The shared HTTP fixture supplies external
+GLTF buffers/textures and redirected GLB loading. Local loading uses the same
+fixture bytes through the supported preloaded-files option.
+
+The action uploads the tested tarball, SHA-256, source revisions/runtime hashes,
+and logs. FX never publishes. Publishing is deliberately not enabled by this
+change: a main-repository release job must wait for the full required test matrix
+and publish that exact artifact without rebuilding or repacking. `--version`
+sets a future release version; the checked-in version is a development placeholder.

@@ -29,7 +29,7 @@ jobs:
       with:
         check_filenames: true
         ignore_words_file: ./DiligentFX/.github/.codespellignore
-        skip: ./DiligentFX/.git,./DiligentFX/ThirdParty
+        skip: ./DiligentFX/.git,./DiligentFX/ThirdParty,*/package-lock.json
         path: ./DiligentFX
 
         

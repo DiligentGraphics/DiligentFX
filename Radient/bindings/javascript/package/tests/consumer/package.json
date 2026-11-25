@@ -1,0 +1,16 @@
+{
+  "name": "radient-installed-package-test",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "radient-copy-assets public/radient && tsc --noEmit && npm run build:vite && npm run build:webpack",
+    "build:vite": "vite build",
+    "build:webpack": "tsc --noEmit false --outDir .webpack-src && webpack --config webpack.config.mjs && radient-copy-assets dist/webpack/radient"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3",
+    "vite": "8.3.8",
+    "webpack": "5.113.0",
+    "webpack-cli": "6.0.1"
+  }
+}
